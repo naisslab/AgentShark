@@ -65,5 +65,3 @@ Machine-readable contracts live under `src/workbench/schemas`:
 - `investigation.schema.json`: a saved investigation document with corpus identity, findings, annotations, and coverage.
 
 Runtime validation also checks database membership, project scope, duplicate task/condition/trial keys, and evidence references. JSON Schema alone cannot establish these relationships. Sequence recipes operate within each session; they never join unrelated sessions into a match.
-
-Conformance tests are in `test/workbench/interop.test.ts`. They cover ID encoding, nanosecond precision, missing data, OpenInference mappings, native-record retention, scope isolation, and a timing round trip. These tests cover the supported mapping, not every possible OTLP field.

@@ -2,7 +2,13 @@
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
+
+// TypeScript is the one development dependency; a fresh checkout has it only after npm ci.
+const ts = await import('typescript').then((m) => m.default, (error) => {
+  if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+  console.error('The build needs TypeScript, a development dependency. Run npm ci in the checkout first.');
+  process.exit(1);
+});
 
 const root = new URL('../', import.meta.url);
 const output = new URL('build/', root);

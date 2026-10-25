@@ -14,7 +14,7 @@ AgentShark needs Node.js 24.12.0 or newer. If `node` is missing or older, stop a
 
 ## 2. Get the Checkout
 
-If your working directory is already an AgentShark checkout (its `package.json` has `"name": "agentshark"`), use it. Otherwise clone the repository into `~/agentshark`, or into the folder the person named. If that folder already holds an AgentShark checkout, update it with `git pull --ff-only` instead of cloning again.
+If you already cloned AgentShark for this request, use that checkout and do not clone again. If your working directory is an AgentShark checkout (its `package.json` has `"name": "agentshark"`), use it. Otherwise clone the repository into `~/agentshark`, or into the folder the person named. If that folder already holds an AgentShark checkout, update it with `git pull --ff-only` instead of cloning again.
 
 Run every later command from the checkout's root.
 
@@ -34,7 +34,7 @@ Check the result:
 agentshark --help
 ```
 
-It prints a list of commands that starts with `telemetry` and `demo`.
+It prints the AgentShark version and a list of commands that starts with `serve` and `demo`.
 
 ## 4. Build the Index
 
@@ -43,7 +43,7 @@ agentshark index
 agentshark sources
 ```
 
-`index` finds the logs of every supported agent on this machine and indexes them into `~/.agentshark/index.sqlite`. A large history can take a minute or more. `sources` reports which agents it found and what their logs record. If `index` reports zero sources, tell the person which agents `sources` lists, and point them to Settings ▸ Sources in the macOS app or to `agentshark config --agent claude|codex --add PATH` for logs in a custom folder.
+`index` finds the logs of every supported agent on this machine and indexes them into `~/.agentshark/index.sqlite`. A large history takes minutes (about 3.5 minutes for 12 GB of logs on one machine), which is longer than many agents let one command run, and `index` prints nothing until it finishes unless its output is a terminal. Run it with a timeout of at least 10 minutes, or in the background, and wait for its summary. If it is cut off, run it again; it keeps the files it already indexed. `sources` reports which agents it found and what their logs record. If `index` reports zero sources, tell the person which agents `sources` lists, and point them to Settings ▸ Sources in the macOS app or to `agentshark config --agent claude|codex --add PATH` for logs in a custom folder.
 
 ## 5. Register the MCP Server
 

@@ -47,7 +47,7 @@ Everything runs locally. AgentShark needs no account, API key or agent plugin, i
 
 ## Quick Start
 
-You need [Node.js](https://nodejs.org/) 24.12 or newer. AgentShark has no runtime dependencies, and Node runs its TypeScript source directly, so a fresh checkout works without `npm install`.
+You need [Node.js](https://nodejs.org/) 24.12 or newer. AgentShark has no runtime dependencies, and Node runs its TypeScript source directly, so a fresh checkout runs without `npm install`. Only building the `agentshark` command or the macOS app needs `npm ci` first.
 
 ### Install with One Prompt
 
@@ -70,7 +70,7 @@ node bin/agentshark.ts demo
 The demo indexes only the bundled synthetic traces into a temporary index and opens the viewer in your browser. It does not scan your home folder or change your saved settings, and it deletes its index when you press Ctrl+C. Three things to try:
 
 1. The viewer opens on **Failures**. Select the first item under *Blocked by environment*; the Lens on the right shows the denied command, where it ran and how the turn ended.
-2. Click **Show in Session** to see the run as turns and steps with the failed call marked. Select the call and open the raw pane to see the source line behind each decoded field.
+2. Click **Show in Session** to see the run as turns and steps with the failed call marked. Select the call, then expand **Raw source line** in the inspector to see the record behind the decoded fields.
 3. Click **Workbench** in the toolbar to open the analysis tools. Choose **Replay Plan** and the session *Fix the failing test* to see which recorded calls `agentshark replay` would run again, including those inside a Codex code-mode script.
 
 ### Inspect Your Own Logs
@@ -81,7 +81,7 @@ node bin/agentshark.ts serve
 
 `serve` finds the logs of every supported agent on this machine, indexes them and opens the viewer. It prints a URL such as `http://127.0.0.1:7373/?token=…`. The token is required, and it changes each time the server restarts. Press Ctrl+C to stop.
 
-The first index works newest first. Sessions being written right now appear within about a second, the last day's within a few seconds, and older history fills in behind them. On one machine with about 4 GB of transcripts (2,000 files), the whole first index took 35 to 40 seconds. Afterwards AgentShark watches the files and parses again only the ones that change.
+The first index works newest first. Sessions being written right now appear within about a second, the last day's within a few seconds, and older history fills in behind them. On one machine with about 4 GB of transcripts (2,000 files), the whole first index took 35 to 40 seconds; on another with about 12 GB (5,900 files), it took about 3.5 minutes. Afterwards AgentShark watches the files and parses again only the ones that change.
 
 To type `agentshark` instead of `node bin/agentshark.ts`, build and link the package. `npm ci` installs TypeScript, which the build uses.
 
@@ -100,7 +100,7 @@ The rest of this README uses the short form.
 2. **Indexing.** Up to eight worker threads parse the files into `~/.agentshark/index.sqlite`, newest first. The status reads "Indexing n/m · since <time>" until history is complete.
 3. **Watching.** The server checks the files every 3 seconds and indexes again at most once every 5 seconds while an agent keeps writing. Start with `--no-watch` to index once; the viewer then shows "Connected · manual refresh", and **Re-index Now** in that status menu (or a restart) refreshes it.
 
-The index is a cache of your logs. Deleting it is safe, because the next run builds it again. Set `AGENTSHARK_HOME` to keep it in another folder, or pass `--index PATH` to a single command. Opened captures are cached in `~/.agentshark/captures/`. AgentShark refuses to open a database that is not an AgentShark index and leaves such a file untouched.
+The index is a cache of your logs, and it can approach their size: on the 12 GB machine above it reached about 10 GB, and the first index used about 5 GB of memory at its peak. Deleting it is safe, because the next run builds it again. Set `AGENTSHARK_HOME` to keep it in another folder, or pass `--index PATH` to a single command. Opened captures are cached in `~/.agentshark/captures/`. AgentShark refuses to open a database that is not an AgentShark index and leaves such a file untouched.
 
 Stopping `serve` also stops an index run in progress; files it had not committed are parsed again next time. If your agents keep their data in a custom location, add it with `agentshark config --agent claude --add PATH` (or `--agent codex`), or in the macOS app under Settings ▸ Sources.
 
@@ -112,14 +112,14 @@ Stopping `serve` also stops an index run in progress; files it had not committed
 |---|---|---|
 | Your coding agent | Available | The one-line prompt in [Install with One Prompt](#install-with-one-prompt) |
 | CLI and browser viewer from source | Available | `npm ci`, `npm run build`, `npm link` (above) |
-| macOS app | Build it yourself; no signed public release yet | `npm run desktop:build` writes `dist/AgentShark.app` |
+| macOS app | Build it yourself; no signed public release yet | `npm ci`, then `npm run desktop:build`, which writes `dist/AgentShark.app` |
 | npm package | Not yet published | `npm ci` and `npm pack` in a checkout, then `npm install -g ./agentshark-0.1.0.tgz` |
 
-The macOS app (macOS 15 or later) bundles the engine and its own Node runtime, so the person using it needs no terminal, Node or agent configuration. It discovers and watches local Claude and Codex logs when it opens, and its Research menu starts the demo and the analysis Workbench.
+The macOS app (macOS 15 or later) bundles the engine and its own Node runtime, so the person using it needs no terminal, Node or agent configuration. It discovers and watches local Claude and Codex logs when it opens, and its Analyze menu opens Critical Path and Compare Runs, the bundled demo, and the other analysis tools in the browser.
 
 Building the app needs a Swift toolchain, and the result carries an ad hoc signature for local testing only. If the checkout sits in an iCloud-synced Desktop or Documents folder, set `APP_OUTPUT` to a path outside it; [docs/RELEASE.md](docs/RELEASE.md) explains why.
 
-Linux and Windows have no native app; use the CLI and the browser viewer. The full test suite runs on Linux and macOS. Windows support is partial: CI runs only type checking and the installed-package checks there. [docs/INSTALL.md](docs/INSTALL.md) covers source configuration, upgrades, uninstalling and troubleshooting, and [docs/RELEASE.md](docs/RELEASE.md) covers release builds, signing and notarization.
+Linux and Windows have no native app; use the CLI and the browser viewer. Windows support is partial: the maintainers run the full test suite on Linux and macOS, but only type checking and the installed-package checks on Windows. [docs/INSTALL.md](docs/INSTALL.md) covers source configuration, upgrades, uninstalling and troubleshooting, and [docs/RELEASE.md](docs/RELEASE.md) covers the app build's options and how to check the result.
 
 ## Supported Agents
 
@@ -319,17 +319,22 @@ Shell commands (Claude `Bash`; Codex `exec_command`, `shell_command`, `shell`) a
 
 ## Workbench for Engineers and Researchers
 
-Open **Workbench** from the viewer's toolbar or the macOS app's Research menu. The same analyses run through `agentshark analyze` and the MCP tool `analyze_trace`. Each tool states the limit of its evidence:
+Open **Workbench** from the viewer's toolbar, or in the macOS app with **Analyze** ▸ **Open Research Tools in Browser**. The macOS app also shows Critical Path and Compare Runs natively, as the Session modes Critical Path (⌥⌘4) and Compare (⌥⌘5) of the run selected in the sidebar. The same analyses run through `agentshark analyze` and the MCP tool `analyze_trace`. Each tool states the limit of its evidence:
 
 | Tool | Question it answers | Evidence limit |
 |---|---|---|
+| Critical Path (AgentPerf) | Which class of time takes the largest share of the run's critical path: model, tools, people or other agents? | Queueing and approval waits are not logged; the path follows only recorded waits. |
+| Cache Anatomy | Where did the prompt cache break, and why? | Codex logs no miss reason, so its causes come from surrounding events. |
+| Span Dependencies | Where was measured time spent? | Only observed dependencies contribute to the dependency graph. |
 | Context Inspector | Which instructions, outputs and compaction records precede an action? | Reconstructed context does not establish exact model inputs. |
-| Compare Runs | Where do recorded actions differ? | Repeated actions can make alignment ambiguous. |
+| Change and Verification | Which checks occurred after an edit? | Chronology does not establish file-level test coverage. |
+| Localization Map | How quickly did a run find the files it changed, and which edits had no read of the current version? | Shell reads and writes are partly invisible; localization describes the search, not the edits. |
+| Capability Envelope | What was the run allowed to do, and what did it use? | Approvals are not logged; network use is read from command text. |
+| Compare Runs (AgentDiff) | Where do two runs of one task part, and how did each answer failures? | The first divergence is a lead for investigation, not a cause. |
+| Compare Records | Where do two sessions' records differ, aligned by event kind and tool name? | Repeated actions can make alignment ambiguous. |
+| Sequence Search | Where does an ordered or repeated pattern occur? | Only the examined event window is searched. |
 | Behavioral Checks | Do recorded actions satisfy explicit rules? | Results are pass, fail or unknown; a pass does not establish task success. |
 | Agent Coordination | Which agents touched the same files or have unresolved delegations? | Overlap and stale reads are review candidates. |
-| Change and Verification | Which checks occurred after an edit? | Chronology does not establish file-level test coverage. |
-| Sequence Search | Where does an ordered or repeated pattern occur? | Only the examined event window is searched. |
-| Dependency Profile | Where was measured time spent? | Only observed dependencies contribute to the dependency graph. |
 | Dataset Builder | Which failure examples have reviewed labels and provenance? | Split grouping and redaction require review before publication. |
 | Research Cohorts | How do labeled tasks, trials and conditions compare? | Descriptive comparisons do not establish causal effects. |
 | Replay Plan | Which recorded calls would a replay run again, and which can it not reproduce? | The trace holds no starting files; the result depends on the workspace you supply. |
@@ -352,23 +357,23 @@ Report security problems privately as described in [SECURITY.md](SECURITY.md), n
 
 ```text
 agentshark serve [--port 7373] [--no-open] [--no-watch]      start the viewer on the live index
-agentshark open FILE.agentcap[.zst|.gz]                      view a capture
-agentshark index [--full|--rederive] [--agent cc|cw|cx|cp]   build or update the index; --rederive recomputes the analysis only
-agentshark capture -o FILE [--since 7d] [--session ID]...    write a capture
-agentshark list [-f FILTER] [--session ID] [--utc] [--json]  print events
-agentshark stats [--view summary|tools|models|kinds|pairs]   print statistics
-agentshark sources [--json]                                  logging health
-agentshark config [--agent codex|claude] [--add PATH]        configure additional source folders
 agentshark demo                                              open bundled synthetic traces
-agentshark analyze OPERATION [--session ID] [--input FILE]   run Workbench analysis or export
-agentshark check [--session ID] [--input FILE]               CI checks: pass, fail, invalid or unknown
-agentshark telemetry import|export [--input FILE]            offline OTLP/OpenInference conversion
-agentshark fields                                            filter fields
+agentshark open FILE.agentcap[.zst|.gz]                      view a capture
 agentshark why [--last|--session ID|--cwd DIR] [--since 8h]  why a run failed: its run report (--json, --md)
 agentshark failures [--since 7d] [--signatures] [--json]     failure episodes that need attention
 agentshark sig "<error text>"                                have agents hit this error before, and what got past it
-agentshark mcp [--scope project|all] [--max-bytes 16384]     read-only MCP server for agents (stdio)
+agentshark list [-f FILTER] [--session ID] [--utc] [--json]  print events
+agentshark stats [--view summary|tools|models|kinds|pairs]   print statistics
+agentshark fields                                            filter fields
+agentshark sources [--json]                                  logging health
+agentshark index [--full|--rederive] [--agent cc|cw|cx|cp]   build or update the index; --rederive recomputes the analysis only
+agentshark config [--agent codex|claude] [--add PATH]        configure additional source folders
+agentshark capture -o FILE [--since 7d] [--session ID]...    write a capture
 agentshark replay SESSION --workspace DIR [--speed N|max]    re-run a session's tool calls in a Docker container
+agentshark mcp [--scope project|all] [--max-bytes 16384]     read-only MCP server for agents (stdio)
+agentshark analyze OPERATION [--session ID] [--input FILE]   run Workbench analysis or export
+agentshark check [--session ID] [--input FILE]               CI checks: pass, fail, invalid or unknown
+agentshark telemetry import|export [--input FILE]            offline OTLP/OpenInference conversion
 ```
 
 `agentshark <command> --help` describes each command's options.
@@ -377,7 +382,7 @@ agentshark replay SESSION --workspace DIR [--speed N|max]    re-run a session's 
 
 | Document | Covers |
 |---|---|
-| [INSTALL.md](docs/INSTALL.md), [RELEASE.md](docs/RELEASE.md) | Installation, source configuration, troubleshooting, bundled runtimes and release validation |
+| [INSTALL.md](docs/INSTALL.md), [RELEASE.md](docs/RELEASE.md) | Installation, source configuration, troubleshooting, the app build and its bundled runtime |
 | [WORKBENCH.md](docs/WORKBENCH.md), [INTEROP.md](docs/INTEROP.md) | Analyses, research workflows, CI checks and offline telemetry conversion |
 | [CAPTURES.md](docs/CAPTURES.md), [FORMAT.md](docs/FORMAT.md) | Capture integrity, recorded analysis, redacted sharing and the `.agentcap` format |
 | [REPLAY.md](docs/REPLAY.md) | `agentshark replay` and what it cannot reproduce |
@@ -386,18 +391,13 @@ agentshark replay SESSION --workspace DIR [--speed N|max]    re-run a session's 
 
 ## Project Status
 
-AgentShark is at version 0.1.0 and has not had a public release. There is no signed and notarized macOS build and no published npm package yet, so the paths above build from source. A hand audit of about 1,100 sampled findings from one index found six inferred rules below the 0.8 precision that the spec requires of a shipped label. Recall has not been measured, and no reviewed held-out trace set exists yet, so treat heuristic findings as advisory. [CHANGELOG.md](CHANGELOG.md) lists what has changed.
+AgentShark is at version 0.1.0 and has not had a public release. There is no signed and notarized macOS build and no published npm package yet, so the paths above build from source. A hand audit of about 1,100 sampled findings from one index found six inferred rules below the 0.8 precision that AgentShark requires of a shipped label. Recall has not been measured, and no reviewed held-out trace set exists yet, so treat heuristic findings as advisory. [CHANGELOG.md](CHANGELOG.md) lists what has changed.
 
 ## Contributing
 
-```bash
-npm ci
-npm run typecheck
-npm test               # node:test suites over synthetic fixtures
-npm run test:package   # packs, installs and exercises the real tarball
-```
+The test suites are not in this repository yet. Build a change with `npm ci` and `npm run build`, try it with `node bin/agentshark.ts demo` and on your own logs, and say in the pull request what you tested.
 
-The macOS client builds with Swift Package Manager. Use only synthetic or explicitly consented, redacted fixtures, and never submit private agent logs or index databases. [CONTRIBUTING.md](CONTRIBUTING.md) covers the native test command, adding an adapter, changing shared payloads and measuring performance on an official Node build.
+The macOS client builds with Swift Package Manager. Use only synthetic or explicitly consented, redacted fixtures, and never submit private agent logs or index databases. [CONTRIBUTING.md](CONTRIBUTING.md) covers adding an adapter, the data a contribution may include and measuring performance on an official Node build.
 
 ## License
 

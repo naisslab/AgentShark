@@ -193,7 +193,7 @@ Replayed output heads are cut to 4 KB.
 - **Nothing is redacted.** The replay output contains command output from the container.
 - **Replays are not indexed.** The Workbench's Replay Report joins a report to its recording and links each call to the recorded event (docs/WORKBENCH.md); the replayed calls themselves do not become events.
 
-## 9. Modules and tests
+## 9. Modules
 
 | Module | Role |
 |---|---|
@@ -205,5 +205,3 @@ Replayed output heads are cut to 4 KB.
 | `src/replay/run.ts` | Pacing loop, batches, result records |
 | `src/cli/replay.ts` | Command, plan header, call lines, JSON lines |
 | `src/workbench/replay.ts` | Workbench operations `replayPlan` and `replayReport` (docs/WORKBENCH.md) |
-
-Tests use synthetic fixtures only. Planner tests index a synthetic Claude and Codex session. Execution tests run against a test-only executor that maps container paths into a temporary directory, so the suite never needs Docker. One integration test runs a short replay in a real container and is skipped when `docker info` fails.
