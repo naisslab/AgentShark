@@ -1,0 +1,849 @@
+/* Statistics and Expert workspaces, the I/O graph chart, and the panel primitives (pn-*)
+   that the Conversation, Statistics, Expert and Sources workspaces share. */
+
+/* Workspace roots set `display`, which would otherwise override the hidden attribute. */
+.cv-root [hidden],
+.st-root [hidden],
+.ex-root [hidden],
+.so-root [hidden] {
+  display: none !important;
+}
+
+.st-root:not([hidden]),
+.ex-root:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: var(--fs-md)/1.4 var(--font-ui);
+}
+
+/* ---- Panel primitives (shared by Statistics, Diagnostics, Sources and Transcript) */
+
+/* A workspace or tab controls row: one 28 px row (§4.3), never wrapping. */
+.pn-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: var(--h-wshead);
+  min-width: 0;
+  padding: 0 12px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  white-space: nowrap;
+}
+
+.pn-spacer {
+  flex: 1 1 auto;
+}
+
+/* Tab strips (§3.1 Pane title: 13/500, active 600 with a 2 px accent underline). */
+.pn-tabs {
+  display: flex;
+  flex: none;
+  align-self: stretch;
+  gap: 16px;
+}
+
+.pn-tab {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pn-tab:hover {
+  color: var(--fg);
+}
+
+.pn-tab.is-active {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.pn-tab.is-active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+.pn-tab:focus-visible,
+.pn-sort:focus-visible,
+.ex-chip:focus-visible,
+.ex-item:focus-visible,
+.pn-table tbody tr:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.btn.pn-sm {
+  font-size: var(--fs-sm);
+}
+
+.pn-input,
+.pn-select {
+  height: var(--h-btn);
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+.pn-input:focus-visible,
+.pn-select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+/* Plain marks (§6.1): no border, no fill; the tone colors the word. */
+.pn-chip {
+  display: inline;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.pn-chip.is-ok {
+  color: var(--ok);
+}
+
+.pn-chip.is-warn {
+  color: var(--warn);
+}
+
+.pn-chip.is-err {
+  color: var(--err);
+}
+
+/* Severity (§6.2 Diagnostics severity): a Plain word in the severity color. */
+.pn-badge {
+  display: inline;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pn-sev-error {
+  color: var(--err);
+}
+
+.pn-sev-warn {
+  color: var(--warn);
+}
+
+.pn-sev-note {
+  color: var(--note);
+}
+
+.pn-sev-chat {
+  color: var(--fg-muted);
+}
+
+/* Tables (§4.3 rows, §3.3 numbers): the header right-aligned over numeric columns, rows 22 compact. */
+.pn-table-wrap {
+  overflow: auto;
+  border-top: 1px solid var(--border);
+}
+
+.pn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+
+.pn-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: var(--row-h);
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.pn-table td {
+  height: var(--row-h);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.pn-table th.num,
+.pn-table td.num {
+  text-align: right;
+}
+
+/* A fitted table (§4.4): the first column flexes; the others keep their content width and hide by priority. */
+.pn-table.fit-cols th:first-child {
+  width: 100%;
+}
+
+.pn-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.pn-table.is-clickable tbody tr {
+  cursor: pointer;
+}
+
+.pn-sort {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.pn-bar {
+  width: 120px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg-sunken);
+}
+
+.pn-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--fg-muted);
+}
+
+/* ---- Statistics (§7.13) */
+
+.st-head {
+  gap: 16px;
+}
+
+.st-scope {
+  margin-left: auto;
+}
+
+.st-filter {
+  font-size: var(--fs-sm);
+}
+
+.st-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px;
+}
+
+.st-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.st-tile {
+  padding: 8px 12px;
+  border-left: 2px solid var(--border);
+}
+
+.st-tile-v {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: var(--lh-lg);
+}
+
+.st-tile-k {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.st-tile.is-err .st-tile-v,
+.st-err {
+  color: var(--err);
+}
+
+.st-grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+}
+
+.st-section h3 {
+  margin: 0 0 6px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: var(--lh-label);
+  text-transform: uppercase;
+}
+
+/* A tab's own controls row. */
+.st-actions,
+.st-io-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--h-wshead);
+  margin-bottom: 8px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.st-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+}
+
+.st-performance-note {
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.st-kind {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.st-key {
+  display: inline-block;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.st-barcell {
+  width: 140px;
+}
+
+.st-twisty {
+  display: inline-block;
+  width: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* I/O Graph: the chart takes the height left by the controls row and the data-table strip (at least 240). */
+.st-pane-io:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.st-chart {
+  flex: 1 1 auto;
+  min-height: 240px;
+}
+
+.st-chart.is-loading {
+  opacity: 0.5;
+}
+
+.st-io-info {
+  flex: none;
+  max-height: 40%;
+  margin-top: 8px;
+  overflow: auto;
+}
+
+.st-io-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.st-io-table {
+  margin-top: 8px;
+}
+
+/* At 1728 px and wider the data table sits to the right of the chart, 320 wide (§7.13). */
+@media (min-width: 1728px) {
+  .st-pane-io:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 16px;
+  }
+  .st-pane-io > .st-io-controls {
+    grid-column: 1 / -1;
+  }
+  .st-io-info {
+    max-height: none;
+    margin-top: 0;
+  }
+}
+
+/* ---- Chart (web/js/lib/chart.js) */
+
+.chart {
+  position: relative;
+  width: 100%;
+}
+
+.chart canvas {
+  display: block;
+}
+
+.chart-tip {
+  position: absolute;
+  z-index: 2;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow);
+  color: var(--fg);
+  font: var(--fs-xs)/1.4 var(--font-ui);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.chart-tip-value {
+  font-weight: 600;
+}
+
+/* ---- Diagnostics (§7.14): severity group headers, rule groups, two-line entries */
+
+.ex-search {
+  width: 200px;
+}
+
+.ex-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ex-sev-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: var(--h-group);
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ex-sev-mark {
+  display: inline-flex;
+}
+
+.ex-n {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+.ex-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.ex-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--h-group);
+  padding: 0 12px 0 24px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ex-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ex-group > summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border: 4px solid transparent;
+  border-left: 5px solid var(--fg-faint);
+}
+
+.ex-group[open] > summary::before {
+  transform: rotate(90deg) translateX(2px);
+}
+
+.ex-group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ex-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  height: var(--h-two);
+  padding: 0 12px 0 40px;
+  border-top: 1px solid var(--border);
+}
+
+.ex-item.is-clickable {
+  cursor: pointer;
+}
+
+.ex-item.is-clickable:hover {
+  background: var(--bg-hover);
+}
+
+.ex-l1,
+.ex-l2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.ex-l1 {
+  font-size: var(--fs-md);
+}
+
+.ex-mark {
+  display: inline-flex;
+  flex: none;
+}
+
+.ex-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ex-l2 {
+  padding-left: 19px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.ex-l2 > :not(:first-child)::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--fg-faint);
+}
+
+.ex-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ex-agent {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.ex-time,
+.ex-rule {
+  flex: none;
+}
+
+.ex-group > .btn {
+  margin: 8px 40px;
+}
+
+.ex-note {
+  padding: 4px 12px 8px 40px;
+}
+
+/* Diagnostics title and scope line; the I/O graph's data table (accessible alternative). */
+.pn-title {
+  margin: 0 6px 0 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ex-scope {
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.st-io-table {
+  margin-top: 8px;
+  font-size: var(--fs-sm);
+}
+.st-io-table > summary {
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.st-io-table .pn-table-wrap {
+  max-height: 260px;
+  overflow: auto;
+}
+
+/* Agent-native statistics (SPEC §12.7): Turns, Time, Endpoints and SRT grouping. */
+.st-turns {
+  display: grid;
+  grid-template-rows: minmax(160px, 45vh) auto;
+  gap: 12px;
+}
+.st-turn-detail {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+.st-ellipsis {
+  display: inline-block;
+  max-width: 48ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.st-actions > .tbar {
+  flex: 1 1 260px;
+  max-width: 560px;
+  height: 12px;
+}
+.st-time {
+  max-width: 760px;
+  margin-top: 6px;
+}
+.st-time td:first-child {
+  white-space: nowrap;
+}
+.st-unattributed td {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+.st-gaps {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.st-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.st-bottlenecks { margin-bottom: 24px; }
+.st-bottleneck-list { margin: 8px 0; }
+.st-bottleneck {
+  display: grid;
+  grid-template-columns: 24px minmax(160px, 34%) minmax(40px, 1fr) 80px 136px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.st-bottleneck:hover { background: var(--bg-elev); }
+.st-bottleneck:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.st-bottleneck-rank { color: var(--fg-muted); text-align: center; }
+.st-bottleneck-name, .st-bottleneck-name strong, .st-bottleneck-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-bottleneck-name strong { font-weight: 500; }
+.st-bottleneck-name small { color: var(--fg-muted); font-size: var(--fs-xs); margin-top: 4px; }
+.st-bottleneck-track { height: 8px; background: var(--bg-sunken); border-radius: 2px; overflow: hidden; }
+.st-bottleneck-fill { display: block; height: 100%; min-width: 2px; }
+.st-bottleneck-value { text-align: right; white-space: nowrap; font-weight: 600; }
+.st-bottleneck-action, .st-filter-action { color: var(--focus); white-space: nowrap; }
+.st-performance-help { margin: 8px 0; font-size: var(--fs-sm); color: var(--fg-muted); }
+.st-performance-help summary { cursor: pointer; width: fit-content; }
+.st-performance-help p { max-width: 80ch; line-height: 1.5; }
+.st-metric-picker { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 8px; }
+.st-metric-picker button[aria-pressed="true"] { border-color: var(--focus); background: var(--sel-inactive); color: var(--fg); box-shadow: inset 0 -2px var(--focus); }
+.st-metric-value { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.st-metric-value strong { font-weight: 600; white-space: nowrap; }
+.st-metric-rail { display: block; width: 100px; height: 6px; background: var(--bg-sunken); border-radius: 2px; overflow: hidden; }
+.st-metric-rail > span { display: block; height: 100%; background: var(--c-llm); }
+@media (max-width: 1000px) {
+  .st-bottleneck { grid-template-columns: 20px minmax(0, 1fr) 136px; gap: 8px; }
+  .st-bottleneck-track { grid-column: 2; grid-row: 2; }
+  .st-bottleneck-value { grid-column: 3; grid-row: 1; }
+  .st-bottleneck-action { grid-column: 3; grid-row: 2; }
+  .st-metric-rail { width: 60px; }
+}
+.st-bottleneck.is-linked { background: var(--bg-hover); box-shadow: inset 2px 0 var(--accent); }
+
+/* ---- Performance (SPEC §6): headline figures and the lanes over time */
+
+.pf-figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 148px), 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.pf-fig {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-left: 2px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-fig:hover:not(:disabled) { background: var(--bg-hover); border-left-color: var(--accent); }
+.pf-fig:disabled { cursor: default; }
+.pf-fig:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.pf-fig-k, .pf-fig-sub { color: var(--fg-muted); font-size: var(--fs-sm); }
+.pf-fig-sub { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.pf-fig-v { font-size: var(--fs-lg); font-weight: 600; line-height: var(--lh-lg); font-variant-numeric: tabular-nums; }
+.pf-fig-k, .pf-fig-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pf-over { margin-bottom: 24px; }
+.pf-over-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 8px; }
+.pf-over-head h3 { margin: 0; }
+.pf-over-head .st-hint { flex: 1 1 320px; }
+.pf-over-actions { display: flex; gap: 4px; }
+
+.pf-lanes { position: relative; border: 1px solid var(--border); border-radius: var(--radius); outline-offset: 1px; }
+.pf-lanes:focus-visible { outline: 2px solid var(--focus); }
+.pf-axis {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 22px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.pf-axis canvas, .pf-plot { display: block; }
+.pf-cursor-time {
+  position: absolute;
+  top: 2px;
+  padding: 1px 6px;
+  border-radius: var(--radius);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.pf-lane + .pf-lane { border-top: 1px solid var(--border); }
+.pf-lane.is-folded .pf-plot { display: none; }
+.pf-lane.is-flash { animation: pf-flash 1.2s ease-out; }
+@keyframes pf-flash { from { background: var(--sel-inactive); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .pf-lane.is-flash { animation: none; } }
+.pf-lane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-height: 22px;
+  padding: 2px 8px 0 4px;
+  font-size: var(--fs-xs);
+}
+.pf-fold {
+  flex: none;
+  padding: 1px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pf-fold:hover { color: var(--accent); }
+.pf-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  min-width: 0;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pf-readout strong { color: var(--fg); font-weight: 600; }
+.pf-readout > span { white-space: nowrap; }
+.pf-swatch { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 2px; vertical-align: baseline; }
+.pf-peak {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.pf-peak:hover { text-decoration: underline; }
+.pf-tip { white-space: normal; max-width: 320px; }
+.pf-table-wrap { max-height: 320px; overflow: auto; }
+
+.st-link {
+  text-align: left;
+}
+.st-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  vertical-align: baseline;
+}
+.pn-table tr.is-selected > td {
+  background: var(--sel-inactive);
+  box-shadow: inset 0 1px 0 var(--focus), inset 0 -1px 0 var(--focus);
+}

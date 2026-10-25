@@ -1,0 +1,724 @@
+/* Conversation workspace ("Follow stream"). Shared pn-* primitives live in stats.css. */
+
+.cv-root:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: var(--fs-md)/1.5 var(--font-ui);
+}
+
+/* ---- Session facts: the first block of the scrolling transcript (the Session header is the only chrome row) */
+
+.cv-head {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cv-head-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cv-title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-spacer {
+  flex: 1;
+}
+
+.cv-agent {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.cv-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+}
+
+.cv-fact {
+  display: inline-flex;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cv-fact-k {
+  color: var(--fg-muted);
+}
+
+.cv-fact-v {
+  max-width: 60ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-rail {
+  margin-top: 8px;
+}
+
+.cv-head-err {
+  color: var(--err);
+  font-size: var(--fs-sm);
+}
+
+/* ---- Stream */
+
+.cv-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cv-stream,
+.cv-foot {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 12px 16px;
+}
+
+.cv-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cv-foot {
+  padding-bottom: 32px;
+  text-align: center;
+}
+
+.cv-foot-note {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.cv-empty-wrap {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.cv-item {
+  position: relative;
+}
+
+.cv-item.is-dim {
+  opacity: 0.7;
+}
+
+.cv-goto {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 1;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.cv-item:hover > .cv-goto,
+.cv-goto:focus-visible {
+  opacity: 1;
+}
+
+.cv-goto:hover {
+  color: var(--fg);
+}
+
+.cv-time {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font: var(--fs-xs) var(--font-ui);
+  white-space: nowrap;
+}
+
+.cv-note {
+  margin: 4px 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.cv-root details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.cv-root details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.cv-root details > summary::before {
+  content: '▸';
+  margin-right: 4px;
+  color: var(--fg-muted);
+}
+
+.cv-root details[open] > summary::before {
+  content: '▾';
+}
+
+/* ---- Messages */
+
+/* Messages carry their kind as a 3 px leading bar only; kind color never colors text (§5.2 item 3). */
+.cv-bubble {
+  padding: 6px 12px 8px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.cv-user {
+  margin-left: 64px;
+  border-left-color: var(--c-user);
+  background: var(--bg-elev);
+}
+
+.cv-assistant {
+  border-left-color: var(--c-llm);
+}
+
+.cv-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.cv-who {
+  color: var(--fg-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ---- Markdown subset */
+
+.cv-md {
+  overflow-wrap: anywhere;
+}
+
+.cv-md.cv-plain {
+  font: var(--fs-sm)/1.5 var(--font-mono);
+  white-space: pre-wrap;
+}
+
+.cv-p {
+  margin: 4px 0;
+}
+
+.cv-h {
+  margin: 8px 0 4px;
+  font-weight: 700;
+}
+
+.cv-list-md {
+  margin: 4px 0;
+  padding-left: 22px;
+}
+
+.cv-nested {
+  margin-left: 18px;
+}
+
+.cv-bullet {
+  list-style-type: disc;
+}
+
+.cv-quote {
+  margin: 4px 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--fg-muted);
+}
+
+.cv-icode {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.cv-link {
+  text-decoration: underline dotted;
+}
+
+.cv-url {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.cv-codeblock {
+  margin: 6px 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.cv-code-lang {
+  padding: 1px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+  font: var(--fs-xs) var(--font-ui);
+}
+
+.cv-pre {
+  max-height: 480px;
+  margin: 0;
+  padding: 6px 8px;
+  overflow: auto;
+  font: var(--fs-sm)/1.45 var(--font-mono);
+  white-space: pre;
+}
+
+.cv-table {
+  margin: 6px 0;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+/* ---- Thinking, injected context, status */
+
+.cv-thinking {
+  padding: 2px 10px;
+  border-left: 3px solid var(--c-thinking);
+  font-size: var(--fs-sm);
+}
+
+.cv-thinking > summary,
+.cv-thinking.is-empty {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cv-think-label {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cv-think-stats {
+  color: var(--fg-muted);
+  font: var(--fs-xs) var(--font-ui);
+}
+
+.cv-thinking > .cv-md,
+.cv-inject > .cv-md {
+  max-height: 480px;
+  margin: 6px 0 4px;
+  overflow: auto;
+}
+
+.cv-inject {
+  padding-left: 10px;
+  border-left: 3px solid var(--c-context);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.cv-inject > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cv-inject-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.cv-inject-first {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--fs-xs) var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-status {
+  display: flex;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--c-agent);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+/* ---- Tool and subagent cards */
+
+.cv-card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.cv-card.is-error {
+  border-color: color-mix(in srgb, var(--err) 60%, var(--border));
+}
+
+.cv-card-head {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cv-card-head:not(.is-static):hover {
+  background: var(--bg-sunken);
+}
+
+.cv-card-head:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.cv-card-head.is-static {
+  cursor: default;
+}
+
+.cv-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cv-k-shell {
+  color: var(--c-tool-shell);
+}
+
+.cv-k-file {
+  color: var(--c-tool-file);
+}
+
+.cv-k-web {
+  color: var(--c-tool-web);
+}
+
+.cv-k-mcp {
+  color: var(--c-tool-mcp);
+}
+
+.cv-k-agent {
+  color: var(--c-agent);
+}
+
+.cv-k-plan {
+  color: var(--c-context);
+}
+
+.cv-k-other {
+  color: var(--fg-muted);
+}
+
+.cv-tool-name {
+  font: 600 var(--fs-sm) var(--font-ui);
+  white-space: nowrap;
+}
+
+.cv-tool-sum {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font: var(--fs-sm) var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-tool-dur {
+  color: var(--fg-muted);
+  font: var(--fs-xs) var(--font-ui);
+  white-space: nowrap;
+}
+
+.cv-badge {
+  padding: 0 5px;
+  border-radius: 3px;
+  font: 600 var(--fs-xs) var(--font-ui);
+  white-space: nowrap;
+}
+
+.cv-badge.is-ok {
+  background: color-mix(in srgb, var(--ok) 10%, var(--bg));
+  color: var(--ok);
+}
+
+.cv-badge.is-err {
+  background: color-mix(in srgb, var(--err) 10%, var(--bg));
+  color: var(--err);
+}
+
+.cv-card-body {
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.cv-sec + .cv-sec {
+  margin-top: 8px;
+}
+
+.cv-sec-title {
+  margin-bottom: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cv-sec .cv-pre {
+  max-height: 360px;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.cv-sec .cv-out {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.cv-sec .btn {
+  margin: 6px 6px 0 0;
+}
+
+.cv-agentcard {
+  border-left: 3px solid var(--c-agent);
+}
+
+.cv-agent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px 6px;
+}
+
+.cv-sid {
+  color: var(--fg-muted);
+  font: var(--fs-xs) var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.cv-agent-result {
+  padding: 0 10px 6px;
+  font-size: var(--fs-sm);
+}
+
+/* ---- Dividers, errors, turn ends */
+
+.cv-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 2px;
+  color: var(--c-compaction);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.cv-divider::before,
+.cv-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed color-mix(in srgb, var(--c-compaction) 60%, var(--border));
+}
+
+.cv-compact-summary {
+  margin: 0 32px;
+  font-size: var(--fs-sm);
+}
+
+.cv-banner {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--err) 55%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--err) 7%, var(--bg));
+}
+
+.cv-banner-label {
+  color: var(--err);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.cv-banner-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.cv-turnend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 2px 0 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+  font: var(--fs-xs) var(--font-ui);
+}
+
+.cv-turnend.is-warn {
+  color: var(--warn);
+}
+
+@media (max-width: 640px) {
+  .cv-user {
+    margin-left: 16px;
+  }
+
+  .cv-compact-summary {
+    margin: 0;
+  }
+
+  .cv-goto {
+    position: static;
+    margin-top: 2px;
+    opacity: 1;
+  }
+}
+
+/* ---- Long sessions: picker, turn rail, day dividers, window bar, nested exec items */
+
+.cv-picker,
+.cv-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+}
+.cv-picker {
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn) 8%, var(--bg));
+}
+.cv-select {
+  max-width: 360px;
+}
+.cv-turn-select {
+  max-width: min(520px, 100%);
+}
+.cv-note-inline {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+/* The day sticks to the top of the stream while its items scroll by. */
+.cv-day {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 6px;
+  pointer-events: none;
+}
+.cv-day > span {
+  padding: 1px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font: 600 var(--fs-xs) var(--font-ui);
+  box-shadow: var(--shadow);
+}
+
+.cv-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 16px 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.cv-flash {
+  animation: cv-flash 1.2s ease-out;
+}
+@keyframes cv-flash {
+  from {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+}
+
+.cv-execs {
+  margin: 2px 0 4px 24px;
+  font-size: var(--fs-sm);
+}
+.cv-execs > summary {
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.cv-exec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}

@@ -1,0 +1,3 @@
+{"type":"launched"}
+{"type":"started","key":"k1","agentId":"b00000000000000f1","label":"audit:deps","phase":"Audit"}
+{"type":"failed","key":"k1","agentId":"b00000000000000f1"}

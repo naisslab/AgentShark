@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentShark Saved Investigation",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "analysisVersion",
+    "coverage",
+    "documentVersion",
+    "title",
+    "question",
+    "sessionIds",
+    "corpusFingerprint",
+    "findings",
+    "annotations",
+    "manifest",
+    "analysisSettings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "agentshark.workbench.v1"
+    },
+    "analysisVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "coverage": {
+      "type": "object",
+      "required": [
+        "sessionIds",
+        "eventsAvailable",
+        "eventsExamined",
+        "truncated",
+        "gaps",
+        "indexAnalysisVersion",
+        "snapshotAt"
+      ],
+      "properties": {
+        "sessionIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "maxItems": 500,
+          "uniqueItems": true
+        },
+        "eventsAvailable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "eventsExamined": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "indexAnalysisVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "snapshotAt": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "documentVersion": {
+      "const": "agentshark.investigation.v1"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "question": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 2000
+    },
+    "sessionIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "maxItems": 500,
+      "uniqueItems": true
+    },
+    "corpusFingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "required": [
+          "text",
+          "confidence",
+          "evidence"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "confidence": {
+            "enum": [
+              "observed",
+              "derived",
+              "candidate",
+              "unknown"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "eventId",
+                "sessionId",
+                "source",
+                "line",
+                "confidence"
+              ],
+              "properties": {
+                "eventId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "sessionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "line": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "confidence": {
+                  "enum": [
+                    "observed",
+                    "derived",
+                    "candidate",
+                    "unknown"
+                  ]
+                },
+                "redacted": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "maxItems": 500
+          }
+        }
+      }
+    },
+    "annotations": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "annotation.schema.json"
+      }
+    },
+    "manifest": {
+      "anyOf": [
+        {
+          "$ref": "manifest.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "analysisSettings": {
+      "type": "object"
+    }
+  }
+}

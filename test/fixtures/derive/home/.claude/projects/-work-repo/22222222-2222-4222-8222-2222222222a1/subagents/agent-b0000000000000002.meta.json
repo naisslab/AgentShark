@@ -1,0 +1,6 @@
+{
+  "agentType": "Explore",
+  "description": "run integration tests",
+  "toolUseId": "toolu_m20",
+  "spawnDepth": 1
+}

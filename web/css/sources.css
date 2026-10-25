@@ -1,0 +1,546 @@
+/* Sources workspace: logging-health report (SPEC §8). Shared pn-* primitives live in stats.css. */
+
+.so-root:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+
+.so-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 32px;
+}
+
+.so-body > * {
+  width: 100%;
+  max-width: 1280px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.so-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.so-head h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+
+.so-headline,
+.so-count,
+.so-more {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+/* ---- Verdict and top findings */
+
+.so-verdict {
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.so-verdict.is-err {
+  border-color: var(--err);
+  background: color-mix(in srgb, var(--err) 7%, var(--bg));
+}
+
+.so-verdict.is-err strong {
+  color: var(--err);
+}
+
+.so-verdict.is-warn {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 7%, var(--bg));
+}
+
+.so-verdict.is-warn strong {
+  color: var(--warn);
+}
+
+.so-verdict.is-ok {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 7%, var(--bg));
+}
+
+.so-verdict.is-ok strong {
+  color: var(--ok);
+}
+
+.so-top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0 0;
+  padding-left: 24px;
+}
+
+.so-top-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.so-top-item:hover {
+  background: var(--bg-sunken);
+}
+
+.so-top-item:focus-visible,
+.so-cap:focus-visible,
+.so-icode:focus-visible,
+.so-sort:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.so-top-agent {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+/* ---- Agent cards */
+
+.so-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.so-section-head h3 {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.so-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.so-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+  gap: 12px;
+}
+
+.so-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  scroll-margin-top: 12px;
+}
+
+.so-card.is-absent {
+  background: var(--bg);
+}
+
+.so-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.so-card-head h3 {
+  margin: 0 4px 0 0;
+  font-size: var(--fs-md);
+}
+
+.so-inv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.so-inv-item dt {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.so-inv-item dd {
+  margin: 0;
+  overflow: hidden;
+  font: var(--fs-sm) var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.so-inv-item.is-wide {
+  grid-column: span 2;
+}
+
+.so-inv-item.is-warn dd {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.so-roots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.so-path {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--bg-sunken);
+  color: var(--fg);
+  font: var(--fs-xs) var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Capability matrix: one compact cell per capability, the note on hover and focus. */
+.so-caps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 1px 10px;
+}
+
+.so-cap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: var(--fs-sm);
+  cursor: help;
+}
+
+.so-cap:hover {
+  background: var(--bg-sunken);
+}
+
+.so-cap-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Capability levels are Plain words in their tone (§6.1); "absent" is --fg-faint, never struck through. */
+.so-level {
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.so-level.is-logged {
+  color: var(--ok);
+}
+
+.so-level.is-derived {
+  color: var(--note);
+}
+
+.so-level.is-partial {
+  color: var(--warn);
+}
+
+.so-level.is-absent {
+  color: var(--fg-faint);
+}
+
+/* ---- Findings and recommendations */
+
+.so-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.so-finding {
+  padding: 4px 0 4px 10px;
+  border-left: 3px solid var(--border-strong);
+}
+
+.so-finding.is-error {
+  border-left-color: var(--err);
+}
+
+.so-finding.is-warn {
+  border-left-color: var(--warn);
+}
+
+.so-finding.is-note {
+  border-left-color: var(--note);
+}
+
+.so-finding-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.so-p {
+  margin: 4px 0;
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.so-rec {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.so-rec-label {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.so-icode {
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: var(--bg-sunken);
+  font: var(--fs-xs) var(--font-mono);
+  cursor: copy;
+}
+
+.so-icode:hover {
+  border-color: var(--border-strong);
+}
+
+.so-icode.is-copied {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.so-code {
+  position: relative;
+  margin: 6px 0;
+}
+
+.so-pre {
+  margin: 0;
+  padding: 6px 72px 6px 8px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  font: var(--fs-sm)/1.45 var(--font-mono);
+  white-space: pre;
+}
+
+.so-copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+/* ---- Source files table (virtualized by web/js/lib/virtual.js) */
+
+.so-problems {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.so-files .pn-input {
+  width: min(320px, 100%);
+}
+
+.so-ftable {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.so-frow {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 110px 150px 72px 72px 84px 76px 86px 104px;
+  align-items: center;
+  min-width: 1020px;
+  height: 24px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+
+.so-fhead {
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.so-fviewport {
+  position: relative;
+  min-width: 1020px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.so-fviewport > .vl-layer {
+  position: sticky;
+  top: 0;
+  overflow: hidden;
+}
+
+.so-fviewport .so-frow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+}
+
+.so-fviewport .so-frow:hover {
+  background: var(--bg-sunken);
+}
+
+.so-fcell {
+  min-width: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.so-fcell.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.so-fcell.is-warn {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* The ellipsis goes at the start so the file name stays visible; <bdi> keeps the path left-to-right. */
+.so-fpath {
+  direction: rtl;
+  font: var(--fs-xs) var(--font-mono);
+  text-align: left;
+}
+
+.so-sort {
+  height: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.so-sort.num {
+  text-align: right;
+}
+
+.so-fempty {
+  padding: 12px;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+/* ---- Report age, capture provenance, structured recommendations */
+
+.so-head {
+  align-items: center;
+}
+.so-age {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.so-stale {
+  color: var(--warn);
+}
+.so-capture {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--note);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+.so-capture h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-md);
+}
+.so-capture-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 3px 14px;
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.so-capture-facts dt {
+  color: var(--fg-muted);
+}
+.so-capture-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.so-capture-facts dd.is-warn {
+  color: var(--warn);
+  font-weight: 600;
+}
+.so-effect {
+  margin: 4px 0;
+  font-size: var(--fs-sm);
+}
+.so-top-effect {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+.so-lang {
+  position: absolute;
+  top: -8px;
+  left: 8px;
+  padding: 0 4px;
+  background: var(--bg);
+  color: var(--fg-muted);
+  font-size: 10px;
+}

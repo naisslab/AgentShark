@@ -1,0 +1,6 @@
+{
+  "agentType": "workflow-subagent",
+  "description": "audit deps",
+  "workflowPhase": "Audit",
+  "spawnDepth": 1
+}

@@ -1,0 +1,4 @@
+{"timestamp":"2026-10-11T09:06:40.000Z","ordinal":6,"type":"session_meta","payload":{"id":"0190a000-0000-7000-8000-00000000000c","session_id":"0190a000-0000-7000-8000-00000000000c","timestamp":"2026-10-11T09:05:00.000Z","cwd":"/work/other","source":"cli","cli_version":"0.160.0","history_base":{"thread_id":"0190a000-0000-7000-8000-00000000000c","end_ordinal_exclusive":6,"end_byte_offset":1518}}}
+{"timestamp":"2026-10-11T09:06:40.010Z","ordinal":7,"type":"event_msg","payload":{"type":"task_started","turn_id":"turn-c3"}}
+{"timestamp":"2026-10-11T09:06:40.020Z","ordinal":8,"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"new branch"}]}}
+{"timestamp":"2026-10-11T09:06:41.000Z","ordinal":9,"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-c3","duration_ms":990}}

@@ -1,0 +1,309 @@
+/* Flow workspace: sequence diagram of one session or turn (web/js/views/flow.js).
+   --fl-width is the diagram width set by flow.js; --fl-c is the color of one arrow, dot or note. */
+
+.fl-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+}
+
+.fl-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.fl-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fl-title-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fl-title-sub {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.fl-spacer {
+  flex: 1;
+}
+
+.fl-status {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.fl-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Lane headers scroll horizontally with the diagram (flow.js mirrors scrollLeft). */
+.fl-head {
+  position: relative;
+  flex: none;
+  height: 38px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+}
+
+.fl-head-inner {
+  position: relative;
+  width: var(--fl-width, 100%);
+  height: 100%;
+}
+
+.fl-lane-head {
+  position: absolute;
+  top: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 6px;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: center;
+}
+
+.fl-lane-name,
+.fl-lane-sub {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fl-lane-name {
+  font-weight: 600;
+}
+
+.fl-lane-sub {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.fl-gutter-head {
+  align-items: flex-start;
+  padding-left: 8px;
+  color: var(--fg-muted);
+}
+
+.fl-lane-link {
+  cursor: pointer;
+}
+
+.fl-lane-link:hover .fl-lane-name {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.fl-lane-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.fl-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.fl-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  outline: none;
+}
+
+.fl-scroll:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+/* Virtual list parts (web/js/lib/virtual.js): a sticky layer as tall as the viewport holds the
+   rows; the spacer after it supplies the rest of the scroll height. */
+.fl-scroll > .vl-layer {
+  position: sticky;
+  top: 0;
+  width: var(--fl-width, 100%);
+  overflow: hidden;
+}
+
+.fl-scroll > .vl-spacer {
+  width: var(--fl-width, 100%);
+}
+
+.fl-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--fl-width, 100%);
+  height: 28px;
+  cursor: pointer;
+}
+
+.fl-row:hover {
+  background: var(--bg-elev);
+}
+
+.fl-row.fl-sel {
+  background: var(--bg-sunken);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.fl-svg {
+  display: block;
+  overflow: visible;
+}
+
+.fl-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.fl-empty[hidden] {
+  display: none;
+}
+
+/* SVG parts */
+
+.fl-life {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.fl-time {
+  fill: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.fl-label {
+  fill: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+}
+
+.fl-note {
+  fill: var(--fg-muted);
+}
+
+.fl-note.fl-err {
+  fill: var(--err);
+}
+
+.fl-arrow {
+  stroke: var(--fl-c, var(--fg-muted));
+  stroke-width: 1.5;
+}
+
+.fl-arrow.fl-return {
+  stroke-dasharray: 4 3;
+}
+
+.fl-head,
+.fl-dot {
+  fill: var(--fl-c, var(--fg-muted));
+  stroke: none;
+}
+
+.fl-prompt { --fl-c: var(--c-user); }
+.fl-text { --fl-c: var(--c-llm); }
+.fl-spawn { --fl-c: var(--c-agent); }
+.fl-info { --fl-c: var(--c-context); }
+.fl-k-shell { --fl-c: var(--c-tool-shell); }
+.fl-k-file { --fl-c: var(--c-tool-file); }
+.fl-k-web { --fl-c: var(--c-tool-web); }
+.fl-k-mcp { --fl-c: var(--c-tool-mcp); }
+.fl-k-agent { --fl-c: var(--c-agent); }
+.fl-k-plan { --fl-c: var(--c-context); }
+.fl-k-other { --fl-c: var(--c-harness); }
+.fl-err { --fl-c: var(--err); }
+
+.fl-sep {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.fl-sep.fl-turn-start {
+  stroke: var(--c-user);
+}
+
+.fl-sep.fl-err {
+  stroke: var(--err);
+}
+
+.fl-sep-bg {
+  fill: var(--bg-elev);
+  stroke: var(--border);
+}
+
+.fl-sep-label {
+  fill: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.fl-sep-label.fl-turn-start {
+  fill: var(--fg);
+  font-weight: 600;
+}
+
+.fl-sep-label.fl-err {
+  fill: var(--err);
+}
+
+/* Scope line and the picker for several selected sessions (SPEC §7.8). */
+.fl-scope {
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.fl-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 1px 4px 1px 8px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn) 8%, var(--bg));
+}
+.fl-picker-label {
+  white-space: nowrap;
+}
+.fl-select {
+  max-width: 320px;
+}

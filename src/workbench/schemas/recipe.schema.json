@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentShark Saved Workbench Recipe",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "name",
+    "operation",
+    "input"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "agentshark.recipe.v1"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "operation": {
+      "enum": [
+        "context",
+        "compare",
+        "checks",
+        "coordination",
+        "verification",
+        "dataset",
+        "search",
+        "profile",
+        "cohort",
+        "exportTable",
+        "investigation",
+        "exportTelemetry"
+      ]
+    },
+    "input": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "search"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/sequenceSearchRequest"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sequenceSearchRequest": {
+      "type": "object",
+      "required": [
+        "sequence"
+      ],
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "maxItems": 500,
+          "uniqueItems": true
+        },
+        "sequence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "minItems": 1,
+                    "maxItems": 30
+                  }
+                ]
+              },
+              "tool": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "textIncludes": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "exitCode": {
+                "type": "integer"
+              },
+              "failure": {
+                "type": "boolean"
+              },
+              "repeat": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32
+              },
+              "sameAsPrevious": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "tool",
+                    "target"
+                  ]
+                },
+                "maxItems": 2
+              }
+            }
+          }
+        },
+        "withinUs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxGapEvents": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50000
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "$comment": "Runtime validation limits expanded repetition to 64 distinct events. The first predicate cannot require sameAsPrevious. Matching is session-local."
+    }
+  }
+}

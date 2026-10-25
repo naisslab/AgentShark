@@ -1,0 +1,281 @@
+/* Timeline workspace and the timeline strip of the Events workspace (web/js/views/timeline.js).
+   The lanes, axis and minimap are canvas; the canvas code reads the same tokens at draw time. */
+
+.tl-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+}
+
+.tl-crumb {
+  display: none;
+}
+
+.tl-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tl-link:hover {
+  text-decoration: underline;
+}
+
+/* Small buttons drawn over the canvas (the strip's "Open in Timeline", "Clear range"). */
+.tl-btn {
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.tl-btn:hover {
+  background: var(--bg-hover);
+}
+
+.tl-btn[hidden] {
+  display: none;
+}
+
+.tl-btn:focus-visible,
+.tl-link:focus-visible,
+.tl-canvas:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.tl-toolbar .tool-btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--sel-wash);
+  color: var(--fg);
+}
+
+.tl-status-err {
+  color: var(--err);
+}
+
+.tl-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tl-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.tl-canvas.tl-pointer {
+  cursor: pointer;
+}
+
+.tl-canvas.tl-selecting {
+  cursor: crosshair;
+}
+
+.tl-canvas.tl-grabbing {
+  cursor: grabbing;
+}
+
+.tl-minimap {
+  display: block;
+  flex: none;
+  width: 100%;
+  height: 40px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* Below the axis (26px) and right of the lane headers (220px), matching timeline.js. */
+.tl-empty {
+  position: absolute;
+  inset: 26px 0 0 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tl-empty[hidden] {
+  display: none;
+}
+
+.tl-tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  max-width: 380px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow);
+  color: var(--fg);
+  font-size: var(--fs-xs);
+  pointer-events: none;
+}
+
+.tl-tooltip[hidden] {
+  display: none;
+}
+
+.tl-tip-title {
+  margin-bottom: 3px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.tl-tip-row {
+  display: flex;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.tl-tip-k {
+  flex: none;
+  min-width: 64px;
+  color: var(--fg-muted);
+}
+
+.tl-tip-v {
+  overflow-wrap: anywhere;
+}
+
+/* The legend is a single metadata line at the bottom (§7.12); the selection sits at its right. */
+.tl-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--h-status);
+  padding: 0 12px;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.tl-legend {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tl-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tl-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.tl-swatch-err {
+  box-shadow: inset 0 0 0 2px var(--err);
+}
+/* Band swatches draw the canvas patterns in the band color (set as `color`). */
+.tl-swatch-hatch,
+.tl-swatch-dots {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+.tl-swatch-hatch {
+  background: repeating-linear-gradient(-45deg, currentColor 0 1px, transparent 1px 3px);
+}
+.tl-swatch-dots {
+  background: radial-gradient(currentColor 0.8px, transparent 1px) 0 0 / 3px 3px;
+}
+
+.tl-selinfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tl-sel-kind {
+  color: var(--fg-muted);
+}
+
+.tl-sel-name {
+  max-width: 40ch;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* Strip in the Events workspace. The host may override the height. */
+.tl-strip {
+  position: relative;
+  height: 140px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.tl-strip-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.tl-strip-actions {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding-left: 6px;
+  background: var(--bg-elev);
+}
+
+.tl-strip-actions .tl-btn {
+  padding: 0 6px;
+  font-size: var(--fs-xs);
+  line-height: 14px;
+}
+
+/* Context lane (SPEC §12.7): canvas strip between the lanes and the minimap. */
+.tl-ctx {
+  display: block;
+  flex: none;
+  width: 100%;
+  border-top: 1px solid var(--border);
+}
+.tl-ctx[hidden] {
+  display: none;
+}

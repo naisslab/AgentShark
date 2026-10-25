@@ -1,0 +1,265 @@
+/* Design tokens (docs/DESIGN.md §3–§5; WEB-CONTRACT "CSS tokens"). Light values on :root; dark values apply when
+   the system prefers dark and no explicit light theme is set, or when data-theme="dark" is set. Every text and
+   background pair below reaches 4.5:1 (§5.3). */
+
+:root {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --bg-elev: #f5f6f8;
+  --bg-sunken: #eef0f3;
+  --fg: #1b1f24;
+  --fg-muted: #525b66;
+  --fg-faint: #5d6670;
+  --border: #d9dde3;
+  --border-strong: #b6bec8;
+
+  --accent: #0a6c78;
+  --accent-fg: #ffffff;
+  --focus: #1b8c9c;
+
+  --ok: #17732f;
+  --warn: #8a5800;
+  --err: #bd2828;
+  --note: #1f5fbf;
+
+  --c-user: #17732f;
+  --c-llm: #1f5fbf;
+  --c-thinking: #7448b6;
+  --c-tool-shell: #8f5e00;
+  --c-tool-file: #7e5f32;
+  --c-tool-web: #0a6d8f;
+  --c-tool-mcp: #0d6f66;
+  --c-agent: #922aa2;
+  --c-context: #566577;
+  --c-compaction: #a84306;
+  --c-hook: #506070;
+  --c-harness: #666058;
+  --c-raw: #756716;
+
+  --agent-claude: #b0502a;
+  --agent-cowork: #8a5a2b;
+  --agent-codex: #3556c8;
+  --agent-copilot: #6f42c1;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* Type scale (§3.1), compact. xs: section label, metadata; sm: group header, row secondary, code;
+     md: pane title, row primary; lg: title. Line heights follow the roles. */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --lh-xs: 14px;
+  --lh-label: 16px;
+  --lh-sm: 16px;
+  --lh-md: 18px;
+  --lh-prose: 20px;
+  --lh-lg: 20px;
+  --lh-code: 18px;
+
+  /* Row and chrome heights (§4.3), compact. */
+  --row-h: 22px;
+  --h-turn: 28px;
+  --h-two: 40px;
+  --h-group: 28px;
+  --h-pane: 32px;
+  --h-wshead: 28px;
+  --h-scope: 36px;
+  --h-top: 44px;
+  --h-status: 24px;
+  --h-btn: 24px;
+  --h-token: 24px;
+  --h-badge: 16px;
+
+  --radius: 4px;
+  --shadow: 0 1px 2px rgba(15, 20, 25, 0.06), 0 6px 20px rgba(15, 20, 25, 0.12);
+
+  /* Agent-native tokens (WEB-CONTRACT "Tokens added to tokens.css"). Text uses of these reach 4.5:1 on --bg. */
+  --tier-failure: #bd2828;
+  --tier-suspect: #bd2828;
+  --tier-benign: #8a5800;
+  --tier-deferred: #8a5800;
+  --band-unrecovered: #bd2828;
+  --band-slow: #b86e00;
+  --lane-episode: #a84306;
+  --hatch-derived: #7d8894;
+  --impact-bad: #bd2828;
+  --impact-warn: #8a5800;
+  --impact-ok: #17732f;
+
+  /* Shell-only tokens (not part of the shared contract). */
+  --bg-menu: #ffffff;
+  --bg-hover: rgba(27, 31, 36, 0.05);
+  /* Rule colors are a 3px leading bar plus this light wash, never a saturated fill. */
+  --tint-strength: 6%;
+  /* Solid badge text on a severity fill (§5.4): white on the light fills, near-black on the dark ones. */
+  --solid-fg: #ffffff;
+  /* The selected row in a focused pane (§5.1): accent at 16% plus a 2 px accent leading bar. */
+  --sel-wash: color-mix(in srgb, var(--accent) 16%, transparent);
+  --match-wash: color-mix(in srgb, var(--err) 12%, transparent);
+  /* Neutral, so an inactive selection never resembles a coloring rule. */
+  --sel-inactive: color-mix(in srgb, var(--fg) 10%, transparent);
+  --scrim: rgba(15, 20, 25, 0.32);
+}
+
+/* Density (SPEC §7.7): compact is the default; comfortable enlarges text and rows. */
+:root[data-density="comfortable"] {
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --lh-xs: 15px;
+  --lh-label: 17px;
+  --lh-sm: 17px;
+  --lh-md: 19px;
+  --lh-prose: 21px;
+  --lh-lg: 21px;
+  --lh-code: 19px;
+  --row-h: 26px;
+  --h-turn: 32px;
+  --h-two: 48px;
+  --h-group: 32px;
+  --h-pane: 36px;
+  --h-wshead: 32px;
+  --h-scope: 40px;
+  --h-top: 48px;
+  --h-status: 26px;
+  --h-btn: 28px;
+  --h-token: 28px;
+}
+
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: #15181b;
+    --bg-elev: #1c2024;
+    --bg-sunken: #101316;
+    --fg: #e6e8eb;
+    --fg-muted: #adb5be;
+    --fg-faint: #9aa3ad;
+    --border: #2c3238;
+    --border-strong: #434b54;
+
+    --accent: #2fb0bd;
+    --accent-fg: #061a1d;
+    --focus: #4cc9d6;
+
+    --ok: #4cc477;
+    --warn: #e3b341;
+    --err: #ff7b72;
+    --note: #6ea8ff;
+
+    --c-user: #57c27a;
+    --c-llm: #6ea8ff;
+    --c-thinking: #b496f0;
+    --c-tool-shell: #e0a93a;
+    --c-tool-file: #cfae7e;
+    --c-tool-web: #4fc3e6;
+    --c-tool-mcp: #3fc1b0;
+    --c-agent: #d683e6;
+    --c-context: #97a7ba;
+    --c-compaction: #f08a4b;
+    --c-hook: #9eacbc;
+    --c-harness: #b3aba1;
+    --c-raw: #c9b64e;
+
+    --agent-claude: #e3916b;
+    --agent-cowork: #d4a574;
+    --agent-codex: #8aa4f7;
+    --agent-copilot: #ad93f2;
+
+    --tier-failure: #ff7b72;
+    --tier-suspect: #ff7b72;
+    --tier-benign: #e3b341;
+    --tier-deferred: #e3b341;
+    --band-unrecovered: #ff7b72;
+    --band-slow: #ffc04d;
+    --lane-episode: #f08a4b;
+    --hatch-derived: #6b7682;
+    --impact-bad: #ff7b72;
+    --impact-warn: #e3b341;
+    --impact-ok: #4cc477;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+    --bg-menu: #22272c;
+    --bg-hover: rgba(230, 232, 235, 0.06);
+    --tint-strength: 10%;
+    --solid-fg: #15181b;
+    --scrim: rgba(0, 0, 0, 0.55);
+    --sel-inactive: color-mix(in srgb, var(--fg) 10%, transparent);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #15181b;
+  --bg-elev: #1c2024;
+  --bg-sunken: #101316;
+  --fg: #e6e8eb;
+  --fg-muted: #adb5be;
+  --fg-faint: #9aa3ad;
+  --border: #2c3238;
+  --border-strong: #434b54;
+
+  --accent: #2fb0bd;
+  --accent-fg: #061a1d;
+  --focus: #4cc9d6;
+
+  --ok: #4cc477;
+  --warn: #e3b341;
+  --err: #ff7b72;
+  --note: #6ea8ff;
+
+  --c-user: #57c27a;
+  --c-llm: #6ea8ff;
+  --c-thinking: #b496f0;
+  --c-tool-shell: #e0a93a;
+  --c-tool-file: #cfae7e;
+  --c-tool-web: #4fc3e6;
+  --c-tool-mcp: #3fc1b0;
+  --c-agent: #d683e6;
+  --c-context: #97a7ba;
+  --c-compaction: #f08a4b;
+  --c-hook: #9eacbc;
+  --c-harness: #b3aba1;
+  --c-raw: #c9b64e;
+
+  --agent-claude: #e3916b;
+  --agent-cowork: #d4a574;
+  --agent-codex: #8aa4f7;
+  --agent-copilot: #ad93f2;
+
+  --tier-failure: #ff7b72;
+  --tier-suspect: #ff7b72;
+  --tier-benign: #e3b341;
+  --tier-deferred: #e3b341;
+  --band-unrecovered: #ff7b72;
+  --band-slow: #ffc04d;
+  --lane-episode: #f08a4b;
+  --hatch-derived: #6b7682;
+  --impact-bad: #ff7b72;
+  --impact-warn: #e3b341;
+  --impact-ok: #4cc477;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --bg-menu: #22272c;
+  --bg-hover: rgba(230, 232, 235, 0.06);
+  --tint-strength: 10%;
+  --solid-fg: #15181b;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --sel-inactive: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+
+/* Increased contrast (§10.4): dividers take the control edge, tertiary text the secondary color. The doubled
+   :root outranks the theme blocks above. */
+@media (prefers-contrast: more) {
+  :root:root:root {
+    --border: var(--border-strong);
+    --fg-faint: var(--fg-muted);
+  }
+}

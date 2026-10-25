@@ -1,0 +1,39 @@
+{
+  "runId": "wf_d0000000-0001",
+  "timestamp": "2026-10-11T09:17:34.000Z",
+  "workflowName": "audit",
+  "status": "failed",
+  "startTime": 1791710254000,
+  "durationMs": 85000,
+  "agentCount": 1,
+  "totalTokens": 900,
+  "totalToolCalls": 1,
+  "summary": "audit run",
+  "phases": [
+    {
+      "title": "Audit"
+    }
+  ],
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 0,
+      "title": "Audit"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 0,
+      "label": "audit:deps",
+      "phaseIndex": 0,
+      "phaseTitle": "Audit",
+      "agentId": "b00000000000000f1",
+      "model": "claude-test-1",
+      "state": "error",
+      "queuedAt": 1791710255000,
+      "startedAt": 1791710260000,
+      "durationMs": 70000,
+      "tokens": 900,
+      "toolCalls": 1
+    }
+  ]
+}

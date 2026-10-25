@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>AgentShark Workbench</title><link rel="icon" type="image/png" sizes="32x32" href="/assets/app-icon-32.png"><link rel="icon" type="image/png" sizes="128x128" href="/assets/app-icon-128.png"><link rel="stylesheet" href="/css/tokens.css"><link rel="stylesheet" href="/css/workbench.css"><script type="module" src="/js/workbench.js"></script></head>
+<body>
+  <header><a class="brand" href="/">AgentShark</a><span class="page">Workbench</span><span class="local">Local analysis</span><a href="/">Back to viewer</a></header>
+  <div class="layout">
+  <!-- Tools grouped by the question they answer (docs/analyses/ANALYSIS-UX.md §6.3). Each button's text is the tool's name. -->
+  <nav id="analyses" aria-label="Analysis tools">
+    <section aria-labelledby="g-time"><h2 id="g-time">Where did the time go?</h2>
+      <button type="button" data-operation="perf" data-engine="AgentPerf">Critical Path</button>
+      <button type="button" data-operation="cache">Cache Anatomy</button>
+      <button type="button" data-operation="profile">Span Dependencies</button>
+    </section>
+    <section aria-labelledby="g-seen"><h2 id="g-seen">What did the agent see and change?</h2>
+      <button type="button" data-operation="context">Context Inspector</button>
+      <button type="button" data-operation="verification">Change and Verification</button>
+      <button type="button" data-operation="localization">Localization Map</button>
+      <button type="button" data-operation="capabilities">Capability Envelope</button>
+    </section>
+    <section aria-labelledby="g-two"><h2 id="g-two">Two runs</h2>
+      <button type="button" data-operation="diff" data-engine="AgentDiff">Compare Runs</button>
+      <button type="button" data-operation="compare">Compare Records</button>
+    </section>
+    <section aria-labelledby="g-patterns"><h2 id="g-patterns">Patterns and checks</h2>
+      <button type="button" data-operation="search">Sequence Search</button>
+      <button type="button" data-operation="checks">Behavioral Checks</button>
+      <button type="button" data-operation="coordination">Agent Coordination</button>
+    </section>
+    <section aria-labelledby="g-export"><h2 id="g-export">Datasets and export</h2>
+      <button type="button" data-operation="dataset">Dataset Builder</button>
+      <button type="button" data-operation="cohort">Research Cohorts</button>
+      <button type="button" data-operation="exportTable">Table Export</button>
+      <button type="button" data-operation="exportTelemetry">Telemetry Export</button>
+    </section>
+    <section aria-labelledby="g-replay"><h2 id="g-replay">Investigation and replay</h2>
+      <button type="button" data-operation="investigation">Investigation</button>
+      <button type="button" data-operation="replayPlan">Replay Plan</button>
+      <button type="button" data-operation="replayReport">Replay Report</button>
+    </section>
+  </nav>
+  <main>
+    <h1><span id="heading">Critical Path</span><span id="engine" class="engine"></span></h1><p id="description" class="lede"></p><p id="pointer" class="pointer" hidden></p>
+    <form id="analysis-form">
+      <div class="scope"><label><span id="session-name">Session</span><select id="session" required><option value="">Loading sessions…</option></select></label><label id="right-label" hidden>Run B<select id="right"></select></label><label class="find">Find Sessions<input id="find" type="search" placeholder="Title, folder or ID" autocomplete="off"></label><button type="button" id="refresh">Refresh Sessions</button></div>
+      <p id="sessions-status" class="hint" role="status"></p>
+      <div id="controls"></div>
+      <details id="research-input"><summary>Research Manifest and Human Labels</summary><p>Import a versioned manifest or reviewed annotations. Files stay in this browser and the local engine.</p><label>Manifest JSON<input type="file" id="manifest" accept=".json,application/json"></label><label>Annotations JSON<input type="file" id="annotations" accept=".json,application/json"></label><p id="research-status" role="status">No research files loaded.</p>
+        <fieldset><legend>Add a Human Label</legend><div class="form-grid"><label>Episode or Session ID<input id="label-subject"></label><label>Label<input id="label-text" placeholder="e.g. dependency failure"></label><label>Reviewer<input id="label-author"></label><label>Rubric Version<input id="label-rubric" value="1"></label><label>Evidence Event IDs (comma separated)<input id="label-evidence"></label></div><label class="check"><input id="label-reviewed" type="checkbox">I reviewed the cited evidence</label><button id="add-label" type="button">Add Label</button><button id="download-labels" type="button">Download Labels</button></fieldset>
+      </details>
+      <details><summary>Advanced Request</summary><p>Optional JSON fields add to the form. The session pickers always decide session, sessions, left and right. Saved recipes include the request, not the trace contents.</p><textarea id="advanced" rows="4" aria-label="Advanced request JSON" placeholder="{}"></textarea></details>
+      <div class="actions"><button class="primary" id="run" type="submit">Run Analysis</button><button id="save-recipe" type="button">Save Recipe</button><select id="recipes" aria-label="Saved recipes"><option value="">Load a Saved Recipe</option></select><button id="export-recipe" type="button">Export Recipe</button><label class="file-button">Import Recipe<input id="import-recipe" type="file" accept=".json,application/json"></label></div>
+    </form>
+    <div id="status" role="status" aria-live="polite">Select a session to inspect its recorded evidence.</div>
+    <section id="results" aria-label="Analysis results"></section>
+  </main></div>
+</body></html>

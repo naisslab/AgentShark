@@ -1,0 +1,7 @@
+AgentShark's npm package has no runtime npm dependencies.
+
+The desktop distribution bundles an official Node.js runtime. Its license and
+third-party notices are included at Contents/Resources/Node-LICENSE.
+Node.js: https://nodejs.org/ and https://github.com/nodejs/node/blob/main/LICENSE
+
+The bundled demonstration contains synthetic traces from this repository.

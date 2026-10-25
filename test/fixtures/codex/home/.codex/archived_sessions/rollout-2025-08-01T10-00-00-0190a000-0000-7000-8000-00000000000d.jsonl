@@ -1,0 +1,13 @@
+{"timestamp":"2026-10-11T09:08:20.000Z","type":"session_meta","payload":{"id":"0190a000-0000-7000-8000-00000000000d","timestamp":"2026-10-11T09:08:20.000Z","cwd":"/work/legacy","originator":"codex_cli_rs","cli_version":"0.30.0","source":"cli"}}
+{"timestamp":"2026-10-11T09:08:20.010Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"run ls"}]}}
+{"timestamp":"2026-10-11T09:08:20.011Z","type":"event_msg","payload":{"type":"user_message","message":"run ls","kind":"plain"}}
+{"timestamp":"2026-10-11T09:08:21.000Z","type":"response_item","payload":{"type":"local_shell_call","call_id":"call_L","status":"completed","action":{"type":"exec","command":["bash","-lc","ls"]}}}
+{"timestamp":"2026-10-11T09:08:21.010Z","type":"event_msg","payload":{"type":"exec_command_begin","call_id":"call_L","command":["bash","-lc","ls"],"cwd":"/work/legacy"}}
+{"timestamp":"2026-10-11T09:08:21.260Z","type":"event_msg","payload":{"type":"exec_command_end","call_id":"call_L","exit_code":0,"duration":{"secs":0,"nanos":250000000},"aggregated_output":"a\nb"}}
+{"timestamp":"2026-10-11T09:08:21.270Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_L","output":"{\"output\":\"a\\nb\",\"metadata\":{\"exit_code\":0,\"duration_seconds\":0.25}}"}}
+{"timestamp":"2026-10-11T09:08:22.000Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"thinking about ls"}}
+{"timestamp":"2026-10-11T09:08:22.001Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"thinking about ls"}]}}
+{"timestamp":"2026-10-11T09:08:22.100Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"commentary","content":[{"type":"output_text","text":"two files"}]}}
+{"timestamp":"2026-10-11T09:08:22.101Z","type":"event_msg","payload":{"type":"agent_message","message":"two files"}}
+{"timestamp":"2026-10-11T09:08:22.200Z","type":"event_msg","payload":{"type":"token_count","input_tokens":300,"cached_input_tokens":100,"cache_write_input_tokens":0,"output_tokens":12,"reasoning_output_tokens":0,"total_tokens":312}}
+{"timestamp":"2026-10-11T09:08:22.300Z","type":"event_msg","payload":{"type":"error","message":"stream disconnected before completion"}}

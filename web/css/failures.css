@@ -1,0 +1,1077 @@
+/* Failures workspace (docs/DESIGN.md §7.3–§7.7): header, facet bar, section index, queue and the Lens. Colors
+   come only from tokens.css; every state also carries a mark, a word or a weight (§5.3). */
+
+/* Shared marks -------------------------------------------------------------------------------------------- */
+
+.prov {
+  color: var(--fg-muted);
+  cursor: help;
+}
+.sig-text {
+  overflow-wrap: anywhere;
+}
+.sig-ph {
+  color: var(--fg-muted);
+}
+/* A sparkline is a data mark, not a control: neutral, never the accent (§5.2 item 2), and at 3:1 (§5.3). */
+.spark {
+  flex: none;
+  color: var(--fg-muted);
+  vertical-align: middle;
+}
+
+/* Chrome: workspace header, facet bar, section index — one 28 px row each, across the workspace -------------- */
+
+.fx-root {
+  background: var(--bg);
+}
+.fx-facets,
+.fx-index {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: var(--h-wshead);
+  min-width: 0;
+  padding: 0 12px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  white-space: nowrap;
+}
+.fx-facet-label {
+  flex: none;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.fx-tiers,
+.fx-facet-menus {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+.fx-facets .tool-btn {
+  height: var(--h-token);
+}
+/* Tier toggles: pressed shows a border; a pressed non-failure toggle takes its tier's Outline border (§7.4). */
+.fx-tier[aria-pressed='true'] {
+  border-color: var(--border-strong);
+  background: var(--bg);
+  color: var(--fg);
+}
+.fx-tier[aria-pressed='true'].tone-suspect,
+.fx-tier[aria-pressed='true'].tone-benign,
+.fx-tier[aria-pressed='true'].tone-deferred {
+  border-color: var(--tone);
+}
+.fx-tier[aria-disabled='true'] {
+  cursor: default;
+}
+.fx-token {
+  padding: 0 4px 0 0;
+}
+.fx-token-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 2px 0 8px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.fx-split-btn {
+  margin-left: auto;
+}
+
+/* Section index (§7.5): plain text items, a 6 px dot on the sections that need attention, the current one in
+   --fg 600 with a 2 px accent underline; the rest go to "+n ▾". */
+.fx-index {
+  gap: 16px;
+}
+.fx-idx {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.fx-idx.needs::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-right: 2px;
+  border-radius: 50%;
+  background: var(--err);
+}
+.fx-idx-n {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+.fx-idx.on {
+  font-weight: 600;
+}
+.fx-idx.on::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+}
+.fx-idx:hover .fx-idx-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.fx-idx-more {
+  margin-left: auto;
+}
+
+.fx-gaps {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  height: var(--h-wshead);
+  align-items: center;
+  padding: 0 12px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.fx-gap {
+  color: var(--warn);
+  font-size: var(--fs-sm);
+}
+.fx-notice {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Panes (§8.1): the queue takes 34% clamped to 440–600 px, the Lens the rest (min 520). -------------------- */
+
+.fx-grid {
+  position: relative;
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: clamp(440px, 34%, 600px) minmax(0, 1fr);
+  grid-template-areas: 'queue lens';
+  min-height: 0;
+}
+.fx-grid > .fx-queue-pane {
+  grid-area: queue;
+}
+.fx-grid > .lens,
+.fx-grid > .follow {
+  grid-area: lens;
+}
+.fx-grid.follow-on > .lens {
+  display: none;
+}
+.fx-queue-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+.fx-queue {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.fx-queue:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* Below 1,100 px the Lens replaces the queue and shows "‹ Queue" (§8.3). */
+.fx-root.is-narrow .fx-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'lens';
+}
+.fx-root.is-narrow .fx-grid > .fx-queue-pane {
+  grid-area: lens;
+}
+.fx-root.is-narrow .fx-grid[data-pane='queue'] > .lens,
+.fx-root.is-narrow .fx-grid[data-pane='lens'] > .fx-queue-pane {
+  display: none;
+}
+.fx-root:not(.is-narrow) .lens-back {
+  display: none;
+}
+
+/* Group headers (§7.5): 28 tall, --bg-elev, disclosure, name and the attention dot. */
+.fx-section {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--h-group);
+  padding: 0 12px 0 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.fx-section:hover {
+  background: color-mix(in srgb, var(--fg) 4%, var(--bg-elev));
+}
+.fx-sec-label {
+  flex: 1 1 auto;
+}
+.fx-section.needs .fx-sec-label::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--err);
+  vertical-align: 1px;
+}
+
+/* Queue rows (§7.6): two lines, 40 tall; 6 12 padding, 2 between lines, 6 after the 16 px mark column. */
+.fx-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  height: var(--h-two);
+  padding: 0 12px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.fx-item:hover {
+  background: var(--bg-hover);
+}
+.fx-item.selected {
+  background: var(--sel-inactive);
+}
+.fx-queue:focus-within .fx-item.selected {
+  background: var(--sel-wash);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.fx-l1,
+.fx-l2 {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+.fx-l1 {
+  gap: 6px;
+  height: var(--lh-md);
+  font-size: var(--fs-md);
+}
+.fx-mark {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  width: 16px;
+}
+.fx-text {
+  flex: 1 1 auto;
+  min-width: 200px;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+.fx-text .sig-text {
+  overflow-wrap: normal;
+}
+.fx-live {
+  flex: none;
+  width: 44px;
+  font-size: var(--fs-sm);
+}
+.fx-age {
+  flex: none;
+  width: 56px;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+.fx-spark {
+  display: inline-flex;
+  flex: none;
+}
+.fx-l2 {
+  height: var(--lh-sm);
+  padding-left: 22px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.fx-l2 > * {
+  flex: none;
+}
+.fx-l2 > :not(.fx-l2-gap):not([hidden]) ~ :not(.fx-l2-gap)::before {
+  content: '·';
+  margin: 0 6px;
+  color: var(--fg-faint);
+}
+.fx-l2 > .right-first::before {
+  content: none !important;
+}
+.fx-l2-gap {
+  flex: 1 1 0;
+  min-width: 8px;
+}
+.fx-l2 > .fx-title {
+  flex: 0 1 auto;
+  min-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fx-l2.measuring > .fx-title {
+  flex-shrink: 0;
+}
+.fx-l2.tight > .fx-title {
+  min-width: 24px;
+}
+.fx-agent {
+  display: inline-flex;
+  align-items: center;
+}
+.fx-wall {
+  color: var(--fg);
+}
+/* The rate change cuts at the tail (min 96) before it drops; its full text is the tooltip (§7.6 Signature row). */
+.fx-l2 > .fx-split {
+  flex: 0 1 auto;
+  min-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fx-l2.measuring > .fx-split {
+  flex-shrink: 0;
+}
+.fx-split .err,
+.fx-split .ok {
+  font-weight: 600;
+}
+.fx-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Evidence pane: a drawer over the Lens, never a new column. */
+.fx-evidence {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: min(480px, 60%);
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+.fx-ev-body {
+  --shadow-inset: 16px;
+  --shadow-pad-top: 12px;
+  --shadow-pad-bottom: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px;
+}
+.fx-ev-body > * + * {
+  margin-top: 8px;
+}
+.fx-ev-sum {
+  overflow-wrap: anywhere;
+}
+.fx-ev-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.fx-raw > summary {
+  cursor: pointer;
+}
+
+/* Lens (§7.7) --------------------------------------------------------------------------------------------- */
+
+.lens {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+.lens-bar-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+.lens-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.lens-body:focus-visible {
+  outline-offset: -2px;
+}
+.lens-frame {
+  max-width: 880px;
+  padding: 12px 16px 24px;
+}
+.lens-header > * + * {
+  margin-top: 6px;
+}
+.lens-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  white-space: nowrap;
+}
+.lens-status-items,
+.lens-status-right {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.lens-status-right {
+  flex: none;
+  margin-left: auto;
+}
+.lens-status .sep {
+  color: var(--fg-faint);
+  white-space: pre;
+}
+.lens-agent {
+  display: inline-flex;
+  align-items: center;
+}
+.lens-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+}
+.lens-title-mark {
+  display: inline-flex;
+  flex: none;
+}
+.lens-title-mark .mk {
+  vertical-align: -0.1em;
+}
+.sig-block {
+  margin: 8px 0 0;
+}
+.lens-quote {
+  margin: 8px 0 0;
+  padding: 0 0 0 12px;
+  border-left: 2px solid var(--border-strong);
+}
+.lens-task {
+  margin-top: 8px;
+}
+.lens-sec {
+  margin-top: 20px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.lens-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.lens-row {
+  margin: 0;
+}
+.lens-row.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.lens-row + .lens-row,
+.lens-sec > * + * {
+  margin-top: 6px;
+}
+.lens-grid {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 4px 12px;
+}
+.lens-grid.wide {
+  grid-template-columns: 120px minmax(0, 1fr);
+}
+.lens-kv {
+  display: contents;
+}
+.lens-k {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+}
+.lens-v {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lens-v > .code-block,
+.lens-v > .code-wrap > .code-block {
+  margin: 0;
+}
+.lens-v > .code-wrap > .code-block {
+  margin-bottom: 4px;
+}
+.lens-match {
+  border-radius: 2px;
+  background: var(--match-wash);
+  color: inherit;
+}
+.lens-note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.lens-sentence {
+  margin: 0;
+}
+.lens-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lens-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.lens-time {
+  color: inherit;
+}
+
+/* Where: plain crumbs separated by "›", each 12–40ch with a tail ellipsis; the step crumb never cuts. */
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  max-height: calc(2 * var(--lh-md) + 2px);
+  overflow: hidden;
+}
+.crumb {
+  max-width: 40ch;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crumb:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.crumb-step {
+  flex: none;
+  max-width: none;
+  color: var(--fg);
+  font-weight: 600;
+}
+.crumb-sep {
+  color: var(--fg-faint);
+}
+/* The metadata line wraps between items, never inside one (§3.5 Number, §7.7 Where). */
+.lens-meta {
+  display: flex;
+  flex-wrap: wrap;
+}
+.lens-meta-item {
+  white-space: nowrap;
+}
+.lens-meta-item:not(:last-child)::after {
+  content: '·';
+  margin: 0 6px;
+  color: var(--fg-faint);
+}
+
+/* Attempts: a block per attempt; the focused one has a 2 px accent leading bar. */
+.ladder,
+.ladder-inner {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.attempt {
+  padding: 4px 8px;
+  border-radius: 0;
+  box-shadow: inset 2px 0 0 transparent;
+}
+.attempt + .attempt,
+.ladder-fold + .attempt,
+.attempt + .ladder-fold {
+  border-top: 1px solid var(--border);
+}
+.attempt.focused,
+.attempt:focus {
+  outline: none;
+  background: var(--sel-wash);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.attempt-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.attempt-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-muted);
+  text-overflow: ellipsis;
+}
+.attempt-n {
+  color: var(--fg);
+  font-weight: 600;
+}
+.attempt-cmd {
+  display: block;
+  margin-top: 2px;
+  cursor: pointer;
+}
+.attempt-cmd.open {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.attempt-result {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.attempt-diff,
+.attempt-edits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+}
+.ladder-fold {
+  padding: 2px 8px;
+}
+.ladder-group {
+  padding-left: 8px;
+  border-left: 2px solid var(--border-strong);
+}
+.ladder-group-label {
+  padding: 2px 0;
+}
+.wdiff {
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.wdiff ins,
+.wdiff del {
+  border-radius: 2px;
+  text-decoration: none;
+}
+.wdiff ins {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+}
+.wdiff del {
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+  text-decoration: line-through;
+}
+.wdiff-sep {
+  color: var(--fg-faint);
+}
+
+.lens-spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.advice {
+  margin: 0;
+  color: var(--fg-muted);
+}
+.lens-sig-id {
+  margin-top: 6px;
+  font-size: var(--fs-xs);
+}
+.lens-sig-id code {
+  font-size: var(--fs-xs);
+}
+.fixes ul,
+.related,
+.mini-queue,
+.evidence,
+.lens-gaps {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.fixes li,
+.related li,
+.mini-queue li,
+.evidence li,
+.lens-gaps li {
+  padding: 2px 0;
+}
+.lens-gaps li {
+  max-width: 80ch;
+}
+.evidence li.earlier {
+  color: var(--fg-muted);
+}
+.rel-detail {
+  display: inline;
+}
+
+/* Diff and report dialogs --------------------------------------------------------------------------------- */
+
+.diff-body {
+  max-height: 70vh;
+  overflow: auto;
+}
+.diff-file + .diff-file {
+  margin-top: 12px;
+}
+.diff-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: var(--fs-sm);
+}
+.diff-hunk {
+  margin: 4px 0;
+  padding: 4px 0;
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-code);
+}
+.diff-hunk > div {
+  padding: 0 8px;
+  white-space: pre;
+}
+.diff-at {
+  color: var(--fg-muted);
+}
+.diff-add {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.diff-del {
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+}
+.report-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.report-redactions {
+  margin: 8px 0;
+  font-size: var(--fs-sm);
+}
+.report-preview {
+  max-height: 46vh;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-code);
+  white-space: pre-wrap;
+}
+.report-preview mark.redacted {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--note) 18%, transparent);
+  color: inherit;
+}
+
+/* Popovers: Split at's calendar ------------------------------------------------------------------------------ */
+
+.cal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 248px;
+  padding: 8px;
+}
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cal-prev .icon {
+  transform: rotate(180deg);
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.cal-dow {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.cal-day {
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.cal-day:hover {
+  background: var(--bg-hover);
+}
+.cal-day.on {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.cal-foot {
+  display: flex;
+  gap: 8px;
+}
+.cal-foot .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Follow (§7.9): takes over its host region in place; scrolls inside it with shadows ------------------------- */
+
+/* A workspace without a Follow region docks it under its content (Web notes). */
+.follow-dock {
+  display: none;
+  flex: none;
+  height: clamp(180px, 34%, 300px);
+  border-top: 1px solid var(--border-strong);
+}
+.follow-dock.follow-on {
+  display: flex;
+}
+.follow-dock > .follow {
+  flex: 1 1 auto;
+}
+
+.follow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+.follow-tabs {
+  display: flex;
+  flex: 0 1 auto;
+  align-self: stretch;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+.follow-tab {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.follow-tab-kind {
+  flex: none;
+  font-weight: 600;
+}
+.follow-tab-subject {
+  max-width: 200px;
+  overflow: hidden;
+  color: var(--fg-muted);
+  text-overflow: ellipsis;
+}
+.follow-tab.on {
+  color: var(--fg);
+}
+.follow-tab.on::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+}
+.follow-tz {
+  flex: none;
+}
+.follow-body {
+  --shadow-inset: 16px;
+  --shadow-pad-top: 12px;
+  --shadow-pad-bottom: var(--row-h);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px var(--row-h);
+}
+.follow-body > * + * {
+  margin-top: 16px;
+}
+.follow-first {
+  line-height: var(--lh-md);
+}
+.follow-tab-sep {
+  margin: 0 4px;
+  color: var(--fg-faint);
+}
+.follow-stage > * + * {
+  margin-top: 6px;
+}
+.follow-stage-head {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.follow-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.follow-meta .follow-ev {
+  margin-left: auto;
+}
+.follow-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* Lifecycle and child rows: word 64, time 120, description flex, "Event ›" on the right of the same line. */
+.follow-row {
+  display: grid;
+  grid-template-columns: 64px 120px minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 8px;
+  min-height: var(--row-h);
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border);
+}
+.follow-row > .diff-body {
+  grid-column: 1 / -1;
+}
+.follow-row.between {
+  box-shadow: inset 2px 0 0 var(--warn);
+}
+.follow-word {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.follow-time {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.follow-desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.follow-ev {
+  justify-self: end;
+  white-space: nowrap;
+}
+.follow-extra {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.follow-row.role-shell-mention .follow-desc,
+.follow-row.role-marker .follow-desc {
+  color: var(--fg-muted);
+}
+/* A failure band (§5.2 item 1): a 3 px leading bar and a flat wash (6%, 10% dark); hatching is for derived time only. */
+.follow-band {
+  padding: 4px 0 4px 8px;
+  border-left: 3px solid var(--band-unrecovered);
+  background: color-mix(in srgb, var(--err) var(--tint-strength), transparent);
+}
+.follow-band-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.follow-band-head .sec-label {
+  color: var(--err);
+}
+.follow-cut {
+  padding: 2px 10px;
+}
+.follow-raw {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.follow-output > .code-block {
+  margin: 0;
+}
+.follow-diff {
+  margin: 4px 0 8px;
+}
+

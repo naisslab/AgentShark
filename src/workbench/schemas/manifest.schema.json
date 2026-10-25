@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentShark Research Manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "runs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "agentshark.manifest.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "runs": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "taskId",
+          "condition",
+          "trial"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "taskId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "condition": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "repositoryRevision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "evaluatorVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "taskGroup": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "trial": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "seed": {
+            "type": "integer"
+          },
+          "split": {
+            "enum": [
+              "train",
+              "validation",
+              "test"
+            ]
+          },
+          "outcome": {
+            "enum": [
+              "success",
+              "failure",
+              "unknown"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

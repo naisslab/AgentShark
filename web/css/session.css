@@ -1,0 +1,553 @@
+/* Session workspace (docs/DESIGN.md §7.8): the header with the mode switch, the run report strip, turn and step
+   rows with call tokens, the episode gutter and stacked time bars (derived time hatched). Rows outside the display
+   filter or time range are dimmed, never hidden. */
+
+.ss-root {
+  background: var(--bg);
+}
+.ss-wshead > .seg {
+  flex: none;
+}
+.ss-picker {
+  flex: none;
+}
+.ss-mode {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.ss-mode[hidden] {
+  display: none;
+}
+.ss-steps {
+  flex-direction: row;
+}
+.ss-mounted {
+  position: relative;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ss-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.ss-notice {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Inspector: a right-hand column, 400 wide by default (360–560). */
+.ss-inspector {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 360px;
+  max-width: 560px;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+}
+.ss-inspector > .fx-evidence {
+  position: static;
+  flex: 1 1 auto;
+  width: auto;
+  border-left: 0;
+  box-shadow: none;
+}
+.ss-inspector.follow-on > .fx-evidence {
+  display: none !important;
+}
+.ss-inspector > .follow {
+  flex: 1 1 auto;
+}
+
+/* Run report strip: title line, summary line, time bar, data-gap line; it collapses to its title line. */
+.ss-report {
+  flex: none;
+  padding: 4px 12px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+.ss-report-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: var(--h-group);
+  white-space: nowrap;
+}
+.ss-report-toggle {
+  width: 16px;
+  margin-left: -4px;
+}
+.ss-title-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-agent {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.ss-report-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--lh-md);
+  white-space: nowrap;
+}
+.ss-summary {
+  gap: 6px;
+  overflow: hidden;
+  font-size: var(--fs-sm);
+}
+.ss-summary .sep {
+  color: var(--fg-faint);
+}
+.ss-summary > * {
+  flex: none;
+}
+.ss-timebar {
+  margin-top: 4px;
+}
+.ss-timebar > .tbar {
+  flex: 1 1 280px;
+  max-width: 640px;
+  width: auto;
+  height: 12px;
+}
+.ss-gaps {
+  display: block;
+  margin-top: 2px;
+}
+.ss-gap-line {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+}
+.ss-gaps .lens-link {
+  flex: none;
+  font-size: var(--fs-sm);
+}
+.ss-gap-list {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  white-space: normal;
+}
+
+/* Stacked time bar: the bucket color; its derived part hatched with --hatch-derived (§5.2 item 5). */
+.tbar {
+  display: inline-flex;
+  flex: none;
+  width: 120px;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--bg);
+}
+.tbar.empty {
+  border-style: dashed;
+}
+.tseg {
+  display: block;
+  flex: none;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--bg);
+  background:
+    linear-gradient(to right, var(--seg) var(--logged), transparent var(--logged)),
+    repeating-linear-gradient(135deg, var(--seg) 0 2px, var(--hatch-derived) 2px 3px, var(--seg) 3px 5px);
+  cursor: default;
+}
+button.tseg {
+  cursor: pointer;
+}
+button.tseg:hover,
+.tseg.on {
+  outline: 2px solid var(--fg);
+  outline-offset: -2px;
+}
+.tseg-unattributed {
+  background: repeating-linear-gradient(45deg, var(--bg-sunken) 0 3px, var(--bg) 3px 6px);
+}
+/* Legend swatches (Statistics ▸ Time). */
+.tlegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.tlegend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.tlegend-sw {
+  display: inline-block;
+  width: 10px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--seg);
+}
+.tlegend-hatch {
+  background: repeating-linear-gradient(135deg, var(--fg-faint) 0 2px, var(--hatch-derived) 2px 3px, var(--fg-faint) 3px 5px);
+}
+
+/* Column header and step rows (§4.3: 22 compact). Numbers right-aligned, tabular, UI font (§3.3). */
+.ss-head,
+.ss-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-right: 12px;
+  white-space: nowrap;
+}
+.ss-head {
+  flex: none;
+  height: var(--row-h);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.ss-c {
+  flex: none;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-c.right {
+  text-align: right;
+}
+.ss-head .ss-c.right {
+  justify-content: flex-end;
+}
+.ss-col-note {
+  color: var(--fg-muted);
+}
+.ss-sort {
+  height: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.ss-sort:hover,
+.ss-sort.on {
+  color: var(--fg);
+}
+.ss-no {
+  width: 44px;
+  padding-left: 0;
+}
+.ss-time {
+  width: 112px;
+}
+.ss-delta {
+  width: 64px;
+}
+.ss-turn {
+  width: 48px;
+  color: var(--fg-muted);
+}
+.ss-session {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 120px;
+  font-size: var(--fs-sm);
+}
+.ss-session-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-intent {
+  flex: 1 1 160px;
+  min-width: 160px;
+  max-width: 420px;
+}
+.ss-calls {
+  display: flex;
+  flex: 1 1 180px;
+  gap: 4px;
+  min-width: 180px;
+  max-width: 360px;
+  overflow: hidden;
+}
+.ss-active {
+  width: 72px;
+}
+.ss-gap {
+  width: 64px;
+}
+.ss-ctx {
+  width: 56px;
+}
+.ss-out {
+  width: 48px;
+}
+.ss-model {
+  width: 88px;
+}
+.ss-step > .ss-time,
+.ss-step > .ss-delta,
+.ss-step > .ss-gap,
+.ss-step > .ss-ctx,
+.ss-step > .ss-out,
+.ss-step > .ss-model {
+  color: var(--fg-muted);
+}
+.ss-step > .faint {
+  color: var(--fg-faint);
+}
+
+/* Call tokens (§6.2): inline code; failure Solid with its mark; suspect, benign and deferred Outline. */
+.call-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  height: 18px;
+  padding: 0 4px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: var(--bg-sunken);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.call-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.call-chip.is-failure {
+  background: var(--tier-failure);
+  color: var(--solid-fg);
+}
+.call-chip.tone-suspect,
+.call-chip.tone-benign,
+.call-chip.tone-deferred {
+  border-color: var(--tone);
+  background: none;
+  color: var(--tone);
+}
+.call-chip:hover {
+  border-color: var(--border-strong);
+}
+.call-chip.selected {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.call-chip.nomatch {
+  opacity: 0.6;
+}
+.call-child,
+.call-told {
+  font-family: var(--font-ui);
+}
+.ep-mark {
+  display: inline-flex;
+}
+.call-more {
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+
+/* The episode gutter: 12 px, one lane per episode. */
+.ss-gutter {
+  position: relative;
+  display: block;
+  flex: none;
+  align-self: stretch;
+  width: 12px;
+}
+.lane {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--lane-episode);
+  cursor: pointer;
+}
+.lane-0 {
+  left: 1px;
+}
+.lane-1 {
+  left: 5px;
+}
+.lane-2 {
+  left: 9px;
+}
+.lane.first {
+  top: 40%;
+}
+.lane.last {
+  bottom: 40%;
+}
+.lane.hit::after {
+  content: '';
+  position: absolute;
+  top: calc(50% - 3px);
+  left: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lane-episode);
+}
+
+.ss-list {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.ss-list:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.ss-list:focus-visible:has(.ss-step.selected, .ss-trow.selected) {
+  outline: none;
+}
+.ss-step {
+  height: var(--row-h);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-md);
+  cursor: default;
+}
+.ss-step:hover,
+.ss-trow:hover {
+  background: var(--bg-hover);
+}
+.ss-step.selected,
+.ss-trow.selected {
+  background: var(--sel-inactive);
+}
+.ss-list:focus-within .ss-step.selected,
+.ss-list:focus-within .ss-trow.selected {
+  background: var(--sel-wash);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.ss-step.failing > .ss-no {
+  color: var(--err);
+  font-weight: 600;
+}
+/* Outside the filter or time range: dimmed, never hidden. */
+.ss-step.nomatch {
+  opacity: 0.5;
+}
+.ss-step.match > .ss-no {
+  font-weight: 600;
+}
+.ss-step.has-selected:not(.selected) {
+  background: var(--sel-inactive);
+}
+
+/* Turn rows: 28 tall, --bg-elev. */
+.ss-trow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--h-turn);
+  padding: 0 12px 0 4px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  font-size: var(--fs-md);
+  white-space: nowrap;
+}
+.ss-trow .twisty {
+  cursor: pointer;
+}
+.ss-tn {
+  flex: none;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+/* A descendant's turn: its session (dot, role, title) before its own T number. */
+.ss-child {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 240px;
+  font-size: var(--fs-sm);
+}
+.ss-child-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-prompt {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-trow > .b-plain {
+  font-size: var(--fs-sm);
+}
+.ss-tmeta,
+.ss-twall {
+  flex: none;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.ss-twall {
+  color: var(--fg);
+}
+.ss-folded,
+.ss-outside,
+.ss-more {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 12px 0 40px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.ss-more {
+  justify-content: center;
+  padding: 0;
+}
+
+/* Claim marks open the claim check in the Lens. */
+.claim-btn {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.claim-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
