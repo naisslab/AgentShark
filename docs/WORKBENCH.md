@@ -4,7 +4,7 @@ The Workbench serves engineers debugging runs and researchers building trace dat
 
 Open Workbench from the web viewer's toolbar, or in the macOS application with Analyze ▸ Open Research Tools in Browser, which opens it in the default browser, where downloads and file inputs work. The Mac draws two of the tools natively: Critical Path (AgentPerf) and Compare Runs (AgentDiff) are its Session modes Critical Path (⌥⌘4) and Compare (⌥⌘5), which read the run selected in the sidebar. Analyze ▸ Explore Bundled Demo opens the Workbench of a synthetic sample in a window of its own.
 
-Select a session, choose an analysis and follow its evidence links back to the event viewer. Each link opens the viewer in a new tab, so the result stays on the page. Saved recipes contain a request, not copies of trace records. Browser recipes stay in local storage; export a recipe JSON file to keep or share it. A loaded recipe's `session`, `sessions`, `left` and `right` set the session pickers, which always decide those four fields over the Advanced Request JSON. Human labels remain in memory until downloaded.
+Select a session, choose an analysis and click **Run Analysis**. Follow its evidence links back to the event viewer. Each link opens the viewer in a new tab, so the result stays on the page. Saved recipes contain a request, not copies of trace records. Browser recipes stay in local storage; export a recipe JSON file to keep or share it. A loaded recipe's `session`, `sessions`, `left` and `right` set the session pickers, which always decide those four fields over the Advanced Request JSON. Human labels remain in memory until downloaded.
 
 The page lists its tools by the question they answer and opens on Critical Path:
 

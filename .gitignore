@@ -1,0 +1,12 @@
+node_modules/
+*.agentcap
+*.agentcap.gz
+*.agentcap.zst
+.agentshark/
+build/
+dist/
+mac/.build/
+output/
+.DS_Store
+*.tgz
+.runtime/
