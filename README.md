@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Find out what your coding agent did, and why the run failed.</strong><br>
-  A local, Wireshark-style inspector for Claude Code, Codex, Claude Cowork and GitHub Copilot Chat logs.
+  A local, Wireshark-style inspector for agent traces.
 </p>
 
 <p align="center">
