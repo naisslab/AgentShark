@@ -79,7 +79,8 @@ agentshark sources [--json]                                  logging health
 agentshark index [--full|--rederive] [--agent cc|cw|cx|cp]   build or update the index; --rederive recomputes the analysis only
 agentshark config [--agent codex|claude] [--add PATH]        configure additional source folders
 agentshark capture -o FILE [--since 7d] [--session ID]...    write a capture
-agentshark replay SESSION --workspace DIR [--speed N|max]    re-run a session's tool calls in a Docker container
+agentshark replay SESSION --workspace DIR [--break N]        re-run a session's tool calls in a Docker container
+agentshark replay --resume NAME [--break N]                  continue a stopped replay, or start again from a saved image
 agentshark mcp [--scope project|all] [--max-bytes 16384]     read-only MCP server for agents (stdio)
 agentshark analyze OPERATION [--session ID] [--input FILE]   run Workbench analysis or export
 agentshark check [--session ID] [--input FILE]               CI checks: pass, fail, invalid or unknown

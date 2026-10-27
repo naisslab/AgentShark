@@ -2,6 +2,7 @@
  * Replay in the Workbench (docs/REPLAY.md, docs/WORKBENCH.md): what `agentshark replay` would run for a session, and
  * a report it wrote, checked against the recording. Neither runs a call; replay itself stays a CLI command.
  */
+import { type Verdict, VERDICTS } from '../replay/compare.ts';
 import { batchesOf, PlanError, planReplay, type PlannedCall, type RecordedResult, revOf, shellQuote } from '../replay/plan.ts';
 import { projectMs } from '../replay/run.ts';
 import { type Data, evidence, fail, integer, object, type Row, textId } from './data.ts';
@@ -9,8 +10,6 @@ import type { Coverage, EvidenceRef } from './types.ts';
 
 const EXCERPT = 200;
 const MAX_REPORT_CALLS = 50_000;
-const VERDICTS = ['same', 'output', 'status', 'unrecorded', 'started', 'skipped', 'error'] as const;
-type Verdict = (typeof VERDICTS)[number];
 
 /** The replay plan of a session and its subagents: classes, skip reasons, input sources and projected duration. */
 export async function replayPlan(data: Data, mode: 'live' | 'capture', input: Row) {
@@ -98,7 +97,16 @@ export function replayReport(data: Data, input: Row) {
         gaps: ['replay-environment-differs-from-recording'], indexAnalysisVersion: data.meta('analysis_version'),
         snapshotAt: data.options.now ?? Date.now() * 1000,
     };
+    const callNumber = (v: unknown) => (Number.isSafeInteger(v) && (v as number) >= 1 ? (v as number) : null);
+    const from = callNumber(plan!.from) ?? 1;
+    const resumedFrom = typeof plan!.resumed === 'string' && plan!.resumed ? plan!.resumed : null;
+    const stoppedBefore = callNumber(summary?.stoppedBefore);
+    const missingPrograms = Array.isArray(plan!.sandbox?.missing)
+        ? (plan!.sandbox.missing as unknown[]).flatMap(m => (m && typeof m === 'object' && typeof (m as Row).name === 'string' ? [(m as Row).name as string] : []))
+        : null;
     if (!summary || summary.interrupted === true) coverage.gaps.push('replay-interrupted');
+    if (stoppedBefore !== null) coverage.gaps.push('replay-stopped-before-end');
+    if (resumedFrom !== null || from > 1) coverage.gaps.push('replay-resumed-from-saved-state');
     if (missing) coverage.gaps.push('report-events-missing-from-index');
     const row = (c: Row) => ({
         n: c.n, tool: c.tool, verdict: c.verdict, input: excerpt(c.summary), recorded: outcome(c.recorded), replayed: outcome(c.replayed),
@@ -115,6 +123,7 @@ export function replayReport(data: Data, input: Row) {
             rev: plan!.rev ?? (plan!.workspace ? 'working tree' : null),
             speed: plan!.speed ?? null, wallSeconds: typeof summary?.wallMs === 'number' ? Math.round(summary.wallMs / 1000) : null,
             interrupted: summary ? summary.interrupted === true : null,
+            from, resumedFrom, stoppedBefore, missingPrograms,
         },
         divergence: first ? row(first) : null,
         calls: calls.map(row),
@@ -122,6 +131,7 @@ export function replayReport(data: Data, input: Row) {
             'A status difference shows that the same action had another outcome in the replay environment; it does not say why.',
             'Every call after the first status difference ran in a state the recording never saw.',
             'Output differences are common across machines; compare them with the environment before reading them as regressions.',
+            ...(resumedFrom !== null || from > 1 ? [`This run resumed before call ${from} from a saved state, which earlier calls or the user may already have changed; its divergence point is the first status difference in this run.`] : []),
         ],
     };
 }
