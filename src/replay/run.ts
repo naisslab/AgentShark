@@ -248,7 +248,7 @@ export interface ResumeState {
   event: string;
   /** The capture file the session was read from; null for the live index. */
   capture: string | null;
-  /** The `--index` the session was read from; null for the default one. */
+  /** The live index path; null for captures or older saved states that used the default index. */
   index: string | null;
   /** The network the replay ran on, which a run from a saved image uses unless `--network` names another. */
   network: string | null;

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { oneLine } from '../adapters/adapter.ts';
+import { defaultIndexPath } from '../index/db.ts';
 import { normalize, type Verdict, VERDICTS } from '../replay/compare.ts';
 import { DockerError, DockerExecutor } from '../replay/executor.ts';
 import { PlanError, planReplay, type PlannedCall, type ReplayPlan, resolveSession, revOf, shellQuote } from '../replay/plan.ts';
@@ -72,7 +73,8 @@ export async function replay(a: Args): Promise<number> {
     throw new CliError(`${saved.name} is a container, which keeps its network and environment; --network and --env apply to a saved image`, 2);
   }
   const capture = string(a.values.capture) ?? saved?.state.capture ?? undefined;
-  const index = string(a.values.index) ?? saved?.state.index ?? undefined;
+  // Save the actual live index even when it came from AGENTSHARK_HOME or the default home directory.
+  const index = string(a.values.index) ?? saved?.state.index ?? (capture === undefined ? defaultIndexPath() : undefined);
   const { plan, from } = await withIndex(a, index, capture, async (db, mode) => {
     try {
       const session = resolveSession(db, ref ?? saved!.state.session);
