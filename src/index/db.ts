@@ -9,13 +9,14 @@ import { DatabaseSync } from 'node:sqlite';
  * Bump together with schema.sql; an AgentShark index of another version is rebuilt from the sources.
  * 4: the derived tables of SPEC §12.3 (steps, failures, episodes, signatures, ...) and the adapter fields
  * attrs.tool.output_tail, attrs.tool.proc_id and attrs.change.files.
+ * 5: Copilot CLI events and VS Code mutation logs, timed tools, tokens and shell-tool classification.
  *
  * The analysis pass keeps two more versions in `meta` (see schema.sql): `analysis_version` (ANALYSIS_VERSION in
  * src/index/derive.ts) and `sig_version` (SIG_VERSION). A mismatch there never rebuilds the index: a writable open or
  * `agentshark index --rederive` re-derives the derived tables from the indexed events without re-parsing, and
  * read-only opens report the gap 'analysis-outdated' instead of failing.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /** `PRAGMA application_id` of every AgentShark index ("ASK1"); a file without it is never modified or deleted. */
 export const APPLICATION_ID = 0x41534b31;
@@ -52,7 +53,7 @@ export interface OpenIndexOptions {
 }
 
 /** Older schema versions that readers keep serving while the new index builds beside them. */
-export const READABLE_OLD_SCHEMAS = [3];
+export const READABLE_OLD_SCHEMAS = [3, 4];
 
 export function nextIndexPath(path: string): string {
   return `${path}.next`;

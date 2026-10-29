@@ -441,11 +441,17 @@ export const INDEX_INPUT_MAX_STRING = 1024;
 // ---------------------------------------------------------------------------
 // Tools
 
-const SHELL_TOOLS = new Set(['Bash', 'BashOutput', 'KillShell', 'KillBash', 'exec_command', 'write_stdin', 'shell_command', 'shell', 'local_shell', 'mcp__workspace__bash']);
-const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'apply_patch', 'view_image']);
-const WEB_TOOLS = new Set(['WebFetch', 'WebSearch', 'web_search', 'web_search_call', 'mcp__workspace__web_fetch']);
-const AGENT_TOOLS = new Set(['Agent', 'Task', 'Workflow', 'SendMessage', 'spawn_agent', 'send_message', 'followup_task', 'wait_agent', 'list_agents', 'interrupt_agent', 'close_agent', 'send_input', 'wait']);
-const PLAN_TOOLS = new Set(['TodoWrite', 'TodoRead', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TaskOutput', 'update_plan', 'ExitPlanMode', 'EnterPlanMode']);
+// Copilot names follow the Claude and Codex ones (the CLI's built-in tools, then VS Code agent mode's).
+const SHELL_TOOLS = new Set(['Bash', 'BashOutput', 'KillShell', 'KillBash', 'exec_command', 'write_stdin', 'shell_command', 'shell', 'local_shell', 'mcp__workspace__bash',
+  'bash', 'read_bash', 'write_bash', 'stop_bash', 'list_bash', 'powershell', 'run_in_terminal', 'get_terminal_output']);
+const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'apply_patch', 'view_image',
+  'view', 'create', 'edit', 'str_replace_editor', 'glob', 'grep',
+  'read_file', 'create_file', 'replace_string_in_file', 'multi_replace_string_in_file', 'insert_edit_into_file', 'file_search', 'grep_search', 'list_dir', 'copilot_readFile']);
+const WEB_TOOLS = new Set(['WebFetch', 'WebSearch', 'web_search', 'web_search_call', 'mcp__workspace__web_fetch', 'web_fetch', 'fetch_webpage']);
+const AGENT_TOOLS = new Set(['Agent', 'Task', 'Workflow', 'SendMessage', 'spawn_agent', 'send_message', 'followup_task', 'wait_agent', 'list_agents', 'interrupt_agent', 'close_agent', 'send_input', 'wait',
+  'task', 'runSubagent']);
+const PLAN_TOOLS = new Set(['TodoWrite', 'TodoRead', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TaskOutput', 'update_plan', 'ExitPlanMode', 'EnterPlanMode',
+  'update_todo', 'manage_todo_list']);
 
 export function toolKind(name: string | undefined, namespace?: string): ToolKindTag {
   if (!name) return 'other';

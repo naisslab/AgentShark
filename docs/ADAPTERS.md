@@ -23,3 +23,13 @@ The conformance tests are not in this repository yet; an adapter must still meet
 The shared conformance fixture verifies explicit root isolation, malformed-line accounting, partial-tail recovery, append fingerprints, stable identifiers and idempotent reindexing. Add source-specific fixtures for duplicate messages, out-of-order timestamps, missing call results, inherited history and deleted or rewritten files. Keep every fixture synthetic or deliberately sanitized.
 
 For a new normalization or derivation rule, document the source field and unsupported cases. Bump the relevant schema or analysis version when semantics change. Captures hash the semantic contract, so source and compiled installations can reproduce each other's recorded analysis.
+
+## Copilot Sources
+
+The VS Code adapter replays JSONL mutation logs into chat-session documents and also reads older JSON documents. It prefers a JSONL file when both formats exist for the same session. Raw references cover the parsed file prefix because one normalized event can depend on several mutations. An unfinished invalid final line stays outside that prefix.
+
+The CLI adapter reads `~/.copilot/session-state/<id>/events.jsonl`, with workspace metadata from `workspace.yaml`, and older flat `<id>.jsonl` files. It pairs tool calls, permissions and hooks by their logged IDs. Subagent events remain in the parent session, and `parentToolCallId` links their tool spans.
+
+Per-call tokens and model latency are available only if the source contains `assistant.usage`. The [Copilot SDK event schema](https://github.com/github/copilot-sdk/blob/main/nodejs/src/generated/session-events.ts) marks that event as ephemeral, so ordinary persisted logs may omit it. Tool output may also be stripped. Missing measurements stay missing; file edit snapshots and cloud coding-agent sessions are outside this adapter. The [VS Code mutation-log implementation](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/chat/common/model/objectMutationLog.ts) defines the initial, set, push and delete entries.
+
+Run `agentshark index --agent cp` to read local Copilot logs. Use `agentshark capture --agent cp -o copilot.agentcap.zst` to preserve the indexed evidence and `agentshark open copilot.agentcap.zst` to inspect it later. Workspace-only metadata changes require `agentshark index --full --agent cp`.

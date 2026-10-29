@@ -67,22 +67,23 @@ const KNOWN: Record<AgentKind, Known> = {
     'permission-decisions': ['partial', 'Approval policy per turn and guardian reviews; codex.tool_decision only through OpenTelemetry.'],
   },
   copilot: {
-    timestamps: ['partial', 'One timestamp per request.'],
-    'llm-latency': ['logged', 'result.timings.totalElapsed per request.'],
-    ttft: ['logged', 'result.timings.firstProgress per request.'],
-    'tool-durations': ['absent', 'Tool call rounds carry no timing.'],
-    'exit-codes': ['absent', 'Tool results carry no exit codes.'],
-    'token-usage': ['absent', 'Chat session files carry no token counts.'],
-    'cache-tokens': ['absent', 'Chat session files carry no token counts.'],
-    'reasoning-text': ['absent', 'No reasoning content is stored.'],
+    timestamps: ['partial', 'VS Code chat sessions: one timestamp per request; Copilot CLI: every event.'],
+    'llm-latency': ['logged', 'result.timings.totalElapsed (elapsedMs) per VS Code request; CLI assistant.usage.duration only when a recorder retains the transient usage event.'],
+    ttft: ['logged', 'result.timings.firstProgress per VS Code request; CLI assistant.usage.timeToFirstTokenMs only when a recorder retains the transient usage event.'],
+    'tool-durations': ['partial', 'Agent-mode tool parts (VS Code 1.109+) log start and end; CLI tool start and completion events; tool call rounds carry none.'],
+    'exit-codes': ['partial', 'Terminal tool parts and CLI shellExecution.exitCode; other tool results carry none.'],
+    'token-usage': ['partial', 'promptTokens and completionTokens in VS Code 1.109+ logs; CLI assistant.usage only when a recorder retains transient usage events.'],
+    'cache-tokens': ['partial', 'CLI assistant.usage reports cache tokens when retained; standard persisted logs may omit it.'],
+    'reasoning-text': ['partial', 'CLI assistant.reasoning events; VS Code chat sessions store none.'],
     'system-prompt': ['absent', 'The system prompt is not stored.'],
     'tool-definitions': ['absent', 'Tool definitions are not stored.'],
-    'subagent-tree': ['absent', 'Copilot Chat sessions have no subagents.'],
-    'file-diffs': ['partial', 'textEditGroup responses and chatEditingSessions snapshots (not parsed).'],
-    cost: ['absent', 'No cost is stored.'],
+    'subagent-tree': ['partial', 'CLI subagent events stay in the parent session, nested under the task call; VS Code sessions have none.'],
+    'file-diffs': ['partial', 'textEditGroup responses, chatEditingSessions snapshots and CLI fileEdits (not parsed).'],
+    cost: ['absent', 'No cost is stored; the CLI counts premium requests at shutdown.'],
     'raw-http': ['absent', 'Requests and responses are not stored.'],
-    'permission-decisions': ['absent', 'No permission records are stored.'],
+    'permission-decisions': ['partial', 'CLI permission.requested and permission.completed events; VS Code stores none.'],
   },
+
 };
 
 interface AgentDef {
@@ -114,9 +115,9 @@ const AGENTS: AgentDef[] = [
   },
   {
     agent: 'copilot',
-    label: 'GitHub Copilot Chat (VS Code)',
-    roots: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'workspaceStorage'), join(e.appSupport, 'Code', 'User', 'globalStorage', 'emptyWindowChatSessions')],
-    detect: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'globalStorage', 'github.copilot-chat')],
+    label: 'GitHub Copilot (VS Code Chat, CLI)',
+    roots: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'workspaceStorage'), join(e.appSupport, 'Code', 'User', 'globalStorage', 'emptyWindowChatSessions'), join(e.home, '.copilot', 'session-state')],
+    detect: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'globalStorage', 'github.copilot-chat'), join(e.home, '.copilot')],
   },
 ];
 
@@ -133,12 +134,6 @@ const OTHER_AGENTS: { agent: string; label: string; paths: (e: DiscoverEnv) => s
     label: 'ChatGPT desktop',
     paths: (e) => [join(e.appSupport, 'com.openai.chat')],
     detail: 'The conversation cache (conversations-v3-*/*.data) is encrypted with a key held in the Keychain.',
-  },
-  {
-    agent: 'copilot-cli',
-    label: 'GitHub Copilot CLI',
-    paths: (e) => [join(e.home, '.copilot', 'logs')],
-    detail: 'Only process lifecycle logs are written; no conversations are stored.',
   },
   { agent: 'gemini-cli', label: 'Gemini CLI', paths: (e) => [join(e.home, '.gemini', 'tmp')], detail: 'AgentShark v1 has no Gemini CLI adapter.' },
   { agent: 'cursor', label: 'Cursor', paths: (e) => [join(e.home, '.cursor'), join(e.appSupport, 'Cursor')], detail: 'AgentShark v1 has no Cursor adapter.' },
@@ -442,6 +437,11 @@ function durationLevel(n: number, logged: number, derived: number, parsed: numbe
 async function findings(def: AgentDef, m: Measures, env: DiscoverEnv, captured: boolean): Promise<HealthFinding[]> {
   const out: HealthFinding[] = [];
   const claude = def.agent === 'claude-code' || def.agent === 'claude-cowork';
+  if (def.agent === 'copilot') out.push({
+    severity: 'note', title: 'Copilot support is partial',
+    detail: 'Reads VS Code JSON and JSONL chat sessions and Copilot CLI session-state logs. CLI usage events are transient in the SDK and may be absent from saved logs, so tokens and model latency can be unavailable. Tool output can also be omitted. File edit snapshots are not decoded; cloud coding-agent sessions are not downloaded.',
+    recommendation: captured ? undefined : DURABLE_CAPTURE,
+  });
   if (m.missing > 0) {
     out.push({
       severity: 'warn',
