@@ -442,7 +442,7 @@ export const INDEX_INPUT_MAX_STRING = 1024;
 // Tools
 
 const SHELL_TOOLS = new Set(['Bash', 'BashOutput', 'KillShell', 'KillBash', 'exec_command', 'write_stdin', 'shell_command', 'shell', 'local_shell', 'mcp__workspace__bash', 'run_command', 'command_status', 'send_command_input', 'read_terminal']);
-const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'apply_patch', 'view_image', 'write_file', 'edit_file', 'view_file', 'view_file_outline', 'view_code_item', 'write_to_file', 'replace_file_content', 'multi_replace_file_content', 'find_by_name', 'codebase_search']);
+const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'apply_patch', 'view_image', 'read_file', 'write_file', 'edit_file', 'view_file', 'view_file_outline', 'view_code_item', 'write_to_file', 'replace_file_content', 'multi_replace_file_content', 'find_by_name', 'codebase_search']);
 const WEB_TOOLS = new Set(['WebFetch', 'WebSearch', 'web_search', 'web_search_call', 'mcp__workspace__web_fetch', 'search_web', 'read_url_content']);
 const AGENT_TOOLS = new Set(['Agent', 'Task', 'Workflow', 'SendMessage', 'spawn_agent', 'send_message', 'followup_task', 'wait_agent', 'list_agents', 'interrupt_agent', 'close_agent', 'send_input', 'wait', 'invoke_subagent', 'browser_subagent']);
 const PLAN_TOOLS = new Set(['TodoWrite', 'TodoRead', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TaskOutput', 'update_plan', 'ExitPlanMode', 'EnterPlanMode', 'task_boundary', 'manage_task']);
