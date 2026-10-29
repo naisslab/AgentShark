@@ -441,11 +441,11 @@ export const INDEX_INPUT_MAX_STRING = 1024;
 // ---------------------------------------------------------------------------
 // Tools
 
-const SHELL_TOOLS = new Set(['Bash', 'BashOutput', 'KillShell', 'KillBash', 'exec_command', 'write_stdin', 'shell_command', 'shell', 'local_shell', 'mcp__workspace__bash']);
-const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'apply_patch', 'view_image']);
-const WEB_TOOLS = new Set(['WebFetch', 'WebSearch', 'web_search', 'web_search_call', 'mcp__workspace__web_fetch']);
-const AGENT_TOOLS = new Set(['Agent', 'Task', 'Workflow', 'SendMessage', 'spawn_agent', 'send_message', 'followup_task', 'wait_agent', 'list_agents', 'interrupt_agent', 'close_agent', 'send_input', 'wait']);
-const PLAN_TOOLS = new Set(['TodoWrite', 'TodoRead', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TaskOutput', 'update_plan', 'ExitPlanMode', 'EnterPlanMode']);
+const SHELL_TOOLS = new Set(['Bash', 'BashOutput', 'KillShell', 'KillBash', 'exec_command', 'write_stdin', 'shell_command', 'shell', 'local_shell', 'mcp__workspace__bash', 'run_command', 'command_status', 'send_command_input', 'read_terminal']);
+const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'apply_patch', 'view_image', 'write_file', 'edit_file', 'view_file', 'view_file_outline', 'view_code_item', 'write_to_file', 'replace_file_content', 'multi_replace_file_content', 'find_by_name', 'codebase_search']);
+const WEB_TOOLS = new Set(['WebFetch', 'WebSearch', 'web_search', 'web_search_call', 'mcp__workspace__web_fetch', 'search_web', 'read_url_content']);
+const AGENT_TOOLS = new Set(['Agent', 'Task', 'Workflow', 'SendMessage', 'spawn_agent', 'send_message', 'followup_task', 'wait_agent', 'list_agents', 'interrupt_agent', 'close_agent', 'send_input', 'wait', 'invoke_subagent', 'browser_subagent']);
+const PLAN_TOOLS = new Set(['TodoWrite', 'TodoRead', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TaskOutput', 'update_plan', 'ExitPlanMode', 'EnterPlanMode', 'task_boundary', 'manage_task']);
 
 export function toolKind(name: string | undefined, namespace?: string): ToolKindTag {
   if (!name) return 'other';
@@ -507,9 +507,9 @@ export function summarizeToolInput(name: string, input: unknown): string {
   };
   const s =
     pick('command', 'cmd', 'commandLine') ??
-    pick('file_path', 'notebook_path', 'path', 'filePath', 'notebookPath', 'uri', 'dirPath') ??
+    pick('file_path', 'notebook_path', 'path', 'filePath', 'notebookPath', 'uri', 'dirPath', 'absolutePath', 'targetFile', 'directoryPath') ??
     (o.pattern ? `${o.pattern}${o.path ? '  in ' + o.path : ''}` : undefined) ??
-    pick('url', 'query', 'description', 'subject', 'task_name', 'prompt', 'message', 'skill', 'title', 'code', 'chars', 'target', 'explanation', 'filePaths');
+    pick('url', 'query', 'queries', 'description', 'subject', 'task_name', 'prompt', 'message', 'skill', 'title', 'code', 'chars', 'target', 'explanation', 'filePaths');
   if (s) return oneLine(String(s), 160);
   try {
     return oneLine(JSON.stringify(o), 160);

@@ -135,9 +135,10 @@ If linking fails with a permission error, use `node /absolute/path/to/agentshark
 | Codex rollouts (`~/.codex/sessions`, `archived_sessions`): CLI, Desktop, exec, VS Code | Fully parsed | Every envelope and legacy record type; continuation pages, child threads, zstd-compressed (`.jsonl.zst`) rollouts |
 | Codex `state_5.sqlite` | Metadata only | Titles, archive state, spawn edges |
 | GitHub Copilot Chat in VS Code (`chatSessions/*.json`) | Partially parsed | Prompts, responses, request timing and tool calls (which carry no timing of their own); edits are not decoded |
-| Google Antigravity, ChatGPT desktop, Copilot CLI, Gemini CLI, Cursor, Windsurf, Ollama, opencode | Detected, not parsed | `agentshark sources` reports that the agent is installed and why its logs cannot be read |
+| Google Antigravity (`~/.gemini/antigravity/conversations/*.db`) | Partially parsed | Prompts, responses, thinking summaries, model calls with logged duration, time to first token and tokens, tool calls with timing, exit codes and permission prompts, and subagent links; older conversations stored as encrypted `.pb` files cannot be read |
+| ChatGPT desktop, Copilot CLI, Gemini CLI, Cursor, Windsurf, Ollama, opencode | Detected, not parsed | `agentshark sources` reports that the agent is installed and why its logs cannot be read |
 
-AgentShark keeps records it does not understand as `raw.unknown` events with their full source line, so nothing is dropped silently; keeping a record is not the same as decoding it. `agentshark sources` (the Sources workspace in the viewer) measures which capabilities the logs on this machine actually provide for each agent: timestamps, latencies, exit codes, token usage, reasoning text and more.
+AgentShark keeps unknown JSON records as `raw.unknown` events with their source line. Antigravity database events retain selected decoded metadata and a step index, but have no raw source line; malformed rows produce diagnostics. Antigravity rows still in the write-ahead log appear after the app checkpoints them. `agentshark sources` (the Sources workspace in the viewer) measures which capabilities the logs on this machine actually provide for each agent: timestamps, latencies, exit codes, token usage, reasoning text and more.
 
 ## A Tour of the Viewer
 

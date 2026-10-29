@@ -83,6 +83,23 @@ const KNOWN: Record<AgentKind, Known> = {
     'raw-http': ['absent', 'Requests and responses are not stored.'],
     'permission-decisions': ['absent', 'No permission records are stored.'],
   },
+  antigravity: {
+    timestamps: ['logged', 'Every step records when it was created; tool steps also record start and completion.'],
+    'llm-latency': ['logged', 'Generator metadata time_to_first_token plus streaming_duration per model call.'],
+    ttft: ['logged', 'Generator metadata time_to_first_token per model call.'],
+    'tool-durations': ['logged', 'Tool steps record creation and completion times.'],
+    'exit-codes': ['partial', 'Command steps and terminal render blocks can carry an exit code; other tools report a step status only.'],
+    'token-usage': ['logged', 'ModelUsageStats per model call.'],
+    'cache-tokens': ['logged', 'cache_read_tokens and cache_write_tokens in ModelUsageStats.'],
+    'reasoning-text': ['partial', 'Planner responses keep thinking summaries when the model returns them.'],
+    'system-prompt': ['partial', 'Generator metadata can hold the system prompt; AgentShark does not index it.'],
+    'tool-definitions': ['partial', 'Generator metadata lists the tools offered; AgentShark does not index them.'],
+    'subagent-tree': ['partial', 'Subagent conversations name their parent conversation.'],
+    'file-diffs': ['absent', 'File edits are snapshotted in code_tracker without a link to their step; not parsed.'],
+    cost: ['absent', 'Steps count credits, not cost.'],
+    'raw-http': ['absent', 'Requests and responses are not stored.'],
+    'permission-decisions': ['partial', 'Requested and completed interactions on tool steps; automatic approvals leave none.'],
+  },
 };
 
 interface AgentDef {
@@ -118,16 +135,16 @@ const AGENTS: AgentDef[] = [
     roots: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'workspaceStorage'), join(e.appSupport, 'Code', 'User', 'globalStorage', 'emptyWindowChatSessions')],
     detect: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'globalStorage', 'github.copilot-chat')],
   },
+  {
+    agent: 'antigravity',
+    label: 'Google Antigravity',
+    roots: (e) => e.autoDiscover === false ? [] : [join(e.home, '.gemini', 'antigravity', 'conversations'), join(e.home, '.gemini', 'antigravity-ide', 'conversations')],
+    detect: (e) => e.autoDiscover === false ? [] : [join(e.home, '.gemini', 'antigravity'), join(e.home, '.gemini', 'antigravity-ide')],
+  },
 ];
 
 // Agents AgentShark cannot parse; detected by existence only (SPEC §8 findings).
 const OTHER_AGENTS: { agent: string; label: string; paths: (e: DiscoverEnv) => string[]; detail: string }[] = [
-  {
-    agent: 'antigravity',
-    label: 'Google Antigravity',
-    paths: (e) => [join(e.home, '.gemini', 'antigravity')],
-    detail: 'Conversation trajectories (conversations/*.pb) are encrypted; only titles, step counts, artifacts and screenshots are readable.',
-  },
   {
     agent: 'chatgpt-desktop',
     label: 'ChatGPT desktop',
@@ -442,6 +459,11 @@ function durationLevel(n: number, logged: number, derived: number, parsed: numbe
 async function findings(def: AgentDef, m: Measures, env: DiscoverEnv, captured: boolean): Promise<HealthFinding[]> {
   const out: HealthFinding[] = [];
   const claude = def.agent === 'claude-code' || def.agent === 'claude-cowork';
+  if (def.agent === 'antigravity') out.push({
+    severity: 'note',
+    title: 'Partial Antigravity trajectory support',
+    detail: 'AgentShark reads conversation .db files, not older encrypted .pb files. Rows still in the write-ahead log appear after Antigravity checkpoints them. Database events have selected decoded metadata but no raw source line.',
+  });
   if (m.missing > 0) {
     out.push({
       severity: 'warn',

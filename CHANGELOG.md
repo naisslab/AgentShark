@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Read Google Antigravity conversations (`~/.gemini/antigravity/conversations/*.db`) as a new agent, `ag`: prompts, responses, model calls with logged latency, time to first token and tokens, tool calls with timing, exit codes and permission prompts, and subagent links.
 - Bundle the JavaScript engine and Node runtime in the macOS application. Discover supported local Claude and Codex sources automatically, with explicit folder selection and an isolated demo.
 - Add the Workbench: context inspection, run comparison, behavioral checks, coordination, change verification, sequence search, dependency profiling, and reviewed dataset export.
 - Add experiment manifests, annotations, cohort summaries, table exports, investigation documents, and offline OTLP/OpenInference conversion.

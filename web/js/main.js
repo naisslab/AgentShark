@@ -108,7 +108,7 @@ const DATE_RANGES = [
   { id: 'all', label: 'All', long: null, us: null },
 ];
 
-const AGENT_BY_PREFIX = { cc: 'claude-code', cw: 'claude-cowork', cx: 'codex', cp: 'copilot' };
+const AGENT_BY_PREFIX = { cc: 'claude-code', cw: 'claude-cowork', cx: 'codex', cp: 'copilot', ag: 'antigravity' };
 
 const HISTORY_MAX = 30;
 /** While an agent works, index runs finish every few seconds; a view follows them at most this often. */
@@ -2436,7 +2436,7 @@ function createOverlay() {
     } else if (!info.counts?.sources) {
       content = [
         h('h2', null, 'No supported logs found in the locations checked'),
-        h('p', { class: 'muted' }, 'AgentShark reads Claude Code and Cowork transcripts, Codex rollouts and VS Code Copilot chat sessions. Sources lists every location it checked.'),
+        h('p', { class: 'muted' }, 'AgentShark reads Claude Code and Cowork transcripts, Codex rollouts, VS Code Copilot chat sessions and Google Antigravity conversations. Sources lists every location it checked.'),
         actions(h('button', { class: 'btn primary', onClick: () => app.switchWorkspace('sources') }, 'Open Sources'), h('button', { class: 'btn', onClick: reindex }, icon('refresh', 13), ' Index again')),
       ];
     } else {

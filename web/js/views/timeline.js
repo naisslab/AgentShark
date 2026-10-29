@@ -75,17 +75,17 @@ const TOKENS = {
   err: '--err', warn: '--warn', note: '--note',
   user: '--c-user', llm: '--c-llm', shell: '--c-tool-shell', file: '--c-tool-file', web: '--c-tool-web', mcp: '--c-tool-mcp',
   agent: '--c-agent', context: '--c-context', compaction: '--c-compaction', hook: '--c-hook', harness: '--c-harness',
-  claude: '--agent-claude', cowork: '--agent-cowork', codex: '--agent-codex', copilot: '--agent-copilot',
+  claude: '--agent-claude', cowork: '--agent-cowork', codex: '--agent-codex', copilot: '--agent-copilot', antigravity: '--agent-antigravity',
   bandBad: '--band-unrecovered', bandSlow: '--band-slow', hatch: '--hatch-derived',
 };
 
-const AGENT_COLOR = { 'claude-code': 'claude', 'claude-cowork': 'cowork', codex: 'codex', copilot: 'copilot' };
+const AGENT_COLOR = { 'claude-code': 'claude', 'claude-cowork': 'cowork', codex: 'codex', copilot: 'copilot', antigravity: 'antigravity' };
 
 const SPAN_LEGEND = [
   ['Turn', 'user'], ['Model call', 'llm'], ['Shell', 'shell'], ['File', 'file'], ['Web', 'web'], ['MCP', 'mcp'],
   ['Agent', 'agent'], ['Other tool', 'harness'], ['Compaction', 'compaction'], ['Hook', 'hook'], ['Retry', 'warn'], ['Permission', 'note'],
 ];
-const AGENT_LEGEND = [['Claude Code', 'claude'], ['Cowork', 'cowork'], ['Codex', 'codex'], ['Copilot', 'copilot']];
+const AGENT_LEGEND = [['Claude Code', 'claude'], ['Cowork', 'cowork'], ['Codex', 'codex'], ['Copilot', 'copilot'], ['Antigravity', 'antigravity']];
 /**
  * Failure bands (SPEC §12.7 Timeline): unrecovered episodes hatched red, recoveries after ≥3 attempts dotted amber.
  * A band is a pattern on a pale fill, never a solid bar, so it reads apart from a Shell span (a darker gold).

@@ -269,6 +269,7 @@ export const AGENTS = [
   { id: 'claude-cowork', label: 'Claude Cowork', color: 'var(--agent-cowork)' },
   { id: 'codex', label: 'Codex', color: 'var(--agent-codex)' },
   { id: 'copilot', label: 'Copilot', color: 'var(--agent-copilot)' },
+  { id: 'antigravity', label: 'Antigravity', color: 'var(--agent-antigravity)' },
 ];
 
 export function agentLabel(agent) {
