@@ -67,21 +67,21 @@ const KNOWN: Record<AgentKind, Known> = {
     'permission-decisions': ['partial', 'Approval policy per turn and guardian reviews; codex.tool_decision only through OpenTelemetry.'],
   },
   copilot: {
-    timestamps: ['partial', 'VS Code chat sessions: one timestamp per request; Copilot CLI: every event.'],
-    'llm-latency': ['logged', 'result.timings.totalElapsed (elapsedMs) per VS Code request; CLI assistant.usage.duration only when a recorder retains the transient usage event.'],
-    ttft: ['logged', 'result.timings.firstProgress per VS Code request; CLI assistant.usage.timeToFirstTokenMs only when a recorder retains the transient usage event.'],
-    'tool-durations': ['partial', 'Agent-mode tool parts (VS Code 1.109+) log start and end; CLI tool start and completion events; tool call rounds carry none.'],
-    'exit-codes': ['partial', 'Terminal tool parts and CLI shellExecution.exitCode; other tool results carry none.'],
-    'token-usage': ['partial', 'promptTokens and completionTokens in VS Code 1.109+ logs; CLI assistant.usage only when a recorder retains transient usage events.'],
-    'cache-tokens': ['partial', 'CLI assistant.usage reports cache tokens when retained; standard persisted logs may omit it.'],
-    'reasoning-text': ['partial', 'CLI assistant.reasoning events; VS Code chat sessions store none.'],
-    'system-prompt': ['absent', 'The system prompt is not stored.'],
+    timestamps: ['partial', 'Chat-session documents: one timestamp per request; CLI and newer VS Code agent logs: every event.'],
+    'llm-latency': ['logged', 'Chat-session result.timings.totalElapsed (elapsedMs); agent session.usage_record.usage.duration or retained assistant.usage.duration.'],
+    ttft: ['logged', 'Chat-session result.timings.firstProgress; agent usage.timeToFirstTokenMs when recorded.'],
+    'tool-durations': ['partial', 'Agent-mode tool parts log start and end; agent event logs pair tool starts and completions. Elapsed time can include approval waits.'],
+    'exit-codes': ['partial', 'Terminal tool parts and agent shellExecution.exitCode; other tool results carry none.'],
+    'token-usage': ['partial', 'Chat-session promptTokens and completionTokens; agent session.usage_record.usage or retained assistant.usage. Older logs may lack usage.'],
+    'cache-tokens': ['partial', 'Agent usage records report cache reads and writes when recorded.'],
+    'reasoning-text': ['partial', 'Agent assistant.reasoning events; chat-session documents store none.'],
+    'system-prompt': ['partial', 'Newer agent logs include system.message and skill context; chat-session documents omit the system prompt.'],
     'tool-definitions': ['absent', 'Tool definitions are not stored.'],
-    'subagent-tree': ['partial', 'CLI subagent events stay in the parent session, nested under the task call; VS Code sessions have none.'],
+    'subagent-tree': ['partial', 'Agent subagent events stay in the parent session, nested under the task call; chat-session documents have none.'],
     'file-diffs': ['partial', 'textEditGroup responses, chatEditingSessions snapshots and CLI fileEdits (not parsed).'],
     cost: ['absent', 'No cost is stored; the CLI counts premium requests at shutdown.'],
     'raw-http': ['absent', 'Requests and responses are not stored.'],
-    'permission-decisions': ['partial', 'CLI permission.requested and permission.completed events; VS Code stores none.'],
+    'permission-decisions': ['partial', 'Agent permission.requested and permission.completed events; chat-session documents store none.'],
   },
 
 };
@@ -439,7 +439,7 @@ async function findings(def: AgentDef, m: Measures, env: DiscoverEnv, captured: 
   const claude = def.agent === 'claude-code' || def.agent === 'claude-cowork';
   if (def.agent === 'copilot') out.push({
     severity: 'note', title: 'Copilot support is partial',
-    detail: 'Reads VS Code JSON and JSONL chat sessions and Copilot CLI session-state logs. CLI usage events are transient in the SDK and may be absent from saved logs, so tokens and model latency can be unavailable. Tool output can also be omitted. File edit snapshots are not decoded; cloud coding-agent sessions are not downloaded.',
+    detail: 'Reads VS Code JSON and JSONL chat sessions and shared CLI/newer VS Code agent session-state logs. Newer agent logs persist per-call usage; older logs can lack tokens and model latency. Tool output can also be omitted. File edit snapshots are not decoded; cloud coding-agent sessions are not downloaded.',
     recommendation: captured ? undefined : DURABLE_CAPTURE,
   });
   if (m.missing > 0) {

@@ -1,8 +1,8 @@
-// GitHub Copilot CLI sessions (SPEC §4.3, best effort): `~/.copilot/session-state/<id>/events.jsonl`, and the
+// Copilot agent sessions (CLI and the newer VS Code harness): `~/.copilot/session-state/<id>/events.jsonl`, and the
 // flat `session-state/<id>.jsonl` of earlier versions. Each line is one session event
 // `{id, timestamp, parentId, type, data}` (the Copilot SDK's session-events schema). A user message opens a
-// turn; assistant.usage, when retained by an SDK recorder, reports one model call with its logged duration;
-// the SDK marks usage events ephemeral, so standard persisted CLI logs may omit them. tool.execution_start and
+// turn; session.usage_record persists model usage in newer logs. SDK recorders can also retain the ephemeral
+// assistant.usage event. Both describe the same call, so its usage identity prevents double counting. tool.execution_start and
 // tool.execution_complete pair by toolCallId. Subagent events stay in the parent's file and nest under the
 // tool call that started them (data.parentToolCallId).
 
@@ -49,6 +49,8 @@ export const copilotCliAdapter: Adapter = {
     const spans = new Map<string, SpanRec>();
     const models = new Set<string>();
     const undecoded = new Set<string>();
+    const usageIds = new Set<string>();
+    const messages: { event: EventRec; callId?: string; toolIds: string[] }[] = [];
     let start: any;
     let title: string | undefined;
     let turn: SpanRec | undefined;
@@ -60,6 +62,8 @@ export const copilotCliAdapter: Adapter = {
       (o, info) => {
         const type = str(o?.type) ?? typeof o;
         const data = o?.data && typeof o.data === 'object' ? o.data : {};
+        const usage = type === 'assistant.usage' ? data
+          : type === 'session.usage_record' && data.usage && typeof data.usage === 'object' && !Array.isArray(data.usage) ? data.usage : undefined;
         if (type === 'session.start' && !start) {
           start = data;
           const previous = session();
@@ -77,9 +81,14 @@ export const copilotCliAdapter: Adapter = {
           }
         }
         if (type === 'session.title_changed') title = str(data.title) ?? title;
-        for (const m of [data.selectedModel, data.newModel, data.model]) if (str(m)) models.add(m);
+        for (const m of [data.selectedModel, data.newModel, data.model, usage?.model]) if (str(m)) models.add(m);
         const ts = isoToUs(o?.timestamp);
-        const d = decode(type, data);
+        let d = decode(type, data);
+        const usageId = str(usage?.accounting?.usageId) ?? str(usage?.apiCallId);
+        const usageKey = usageId ? JSON.stringify([str(usage?.accounting?.sourceSessionId) ?? sid, usageId]) : undefined;
+        const duplicateUsage = usageKey !== undefined && usageIds.has(usageKey);
+        if (usageKey) usageIds.add(usageKey);
+        if (duplicateUsage) d = { kind: 'harness.other', actor: 'harness', summary: 'duplicate model usage', attrs: {}, flags: ['dup'] };
         if (!d) {
           stats.unknown++;
           if (!undecoded.has(type)) {
@@ -114,8 +123,8 @@ export const copilotCliAdapter: Adapter = {
           ev.attrs.turn = { id: str(data.interactionId), index: turnIndex++ };
           spans.set(turn.id, turn);
         }
-        // Session records describe the session, not the turn they fall in; session.error fails the turn.
-        if (turn && (!type.startsWith('session.') || type === 'session.error')) {
+        // Persisted usage belongs to the active turn; other session records describe the session itself.
+        if (turn && (!type.startsWith('session.') || type === 'session.error' || usage !== undefined)) {
           ev.turn = turn.id;
           ev.span ??= turn.id;
           turn.end = Math.max(turn.end ?? turn.start, ev.ts);
@@ -126,10 +135,14 @@ export const copilotCliAdapter: Adapter = {
           turn.status = 'cancelled';
           turn = undefined;
         }
-        const parent = str(data.parentToolCallId) ? spanId(ev.session, 'tool', data.parentToolCallId) : ev.turn;
+        const parentCall = str(usage?.parentToolCallId) ?? str(data.parentToolCallId);
+        const parent = parentCall ? spanId(ev.session, 'tool', parentCall) : ev.turn;
+        if (type === 'assistant.message') messages.push({ event: ev, callId: str(data.apiCallId) ?? str(data.requestId),
+          toolIds: Array.isArray(data.toolRequests) ? data.toolRequests.map((t: any) => str(t?.toolCallId)).filter(Boolean) : [] });
         if (type === 'tool.execution_start' || type === 'tool.execution_complete') toolSpan(ev, data, parent, spans);
         else if (type.startsWith('subagent.') && str(data.toolCallId)) ev.span = spanId(ev.session, 'tool', data.toolCallId);
-        else if (type === 'assistant.usage') llmSpan(ev, data, parent, spans);
+        else if (usage && !duplicateUsage) llmSpan(ev, usage, parent, spans,
+          type === 'session.usage_record' ? 'session.usage_record.usage.duration' : 'assistant.usage.duration');
         else if (type === 'permission.requested' || type === 'permission.completed') pairedSpan(ev, 'permission', str(data.requestId), parent, spans);
         else if (type === 'hook.start' || type === 'hook.end') pairedSpan(ev, 'hook', str(data.hookInvocationId), parent, spans);
         events.push(ev);
@@ -152,6 +165,28 @@ export const copilotCliAdapter: Adapter = {
     const cwd = str(ctxt.cwd) ?? workspace.cwd;
     const root = str(ctxt.gitRoot) ?? workspace.git_root ?? cwd;
     const git = { branch: str(ctxt.branch) ?? workspace.branch, commit: str(ctxt.headCommit), repo: str(ctxt.repository) ?? workspace.repository };
+    // Usage may precede or follow its message. Join by logged call IDs, never by proximity or the entire turn.
+    const byId = new Map(events.map(ev => [ev.id, ev]));
+    const toolEvents = new Map<string, EventRec[]>();
+    for (const ev of events) if (ev.kind === 'tool.call' && ev.attrs.tool?.call_id) {
+      const id = ev.attrs.tool.call_id;
+      const list = toolEvents.get(id) ?? [];
+      list.push(ev);
+      toolEvents.set(id, list);
+    }
+    for (const { event: ev, callId, toolIds } of messages) {
+      const llm = callId ? spans.get(spanId(session(), 'llm', callId)) : undefined;
+      ev.span = llm?.id;
+      const mid = ev.attrs.llm?.message_id;
+      if (!mid) continue;
+      const usageEvent = llm?.firstEvent ? byId.get(llm.firstEvent) : undefined;
+      if (usageEvent?.attrs.llm) usageEvent.attrs.llm.message_id = mid;
+      for (const id of toolIds) for (const tool of toolEvents.get(id) ?? []) {
+        tool.attrs.llm = { message_id: mid, model: ev.attrs.llm?.model };
+        const sp = tool.span ? spans.get(tool.span) : undefined;
+        if (llm && sp && sp.parent === tool.turn) sp.parent = llm.id;
+      }
+    }
     sink.emit({
       rec: 'session',
       id: session(),
@@ -224,21 +259,37 @@ function pairedSpan(ev: EventRec, kind: 'permission' | 'hook', key: string | und
   ev.dur = sp.dur;
 }
 
-/** assistant.usage closes one model call: it ends at the record's time and lasts the logged duration. */
-function llmSpan(ev: EventRec, data: any, parent: string | undefined, spans: Map<string, SpanRec>): void {
+/** A usage record closes one model call: it ends at the record's time and lasts the logged duration. */
+function llmSpan(ev: EventRec, data: any, parent: string | undefined, spans: Map<string, SpanRec>, durationField: string): void {
   const dur = msToUs(data.duration);
   const id = spanId(ev.session, 'llm', str(data.apiCallId) ?? str(data.requestId) ?? ev.id);
   ev.span = id;
   ev.dur = dur;
   spans.set(id, {
     rec: 'span', id, session: ev.session, kind: 'llm', name: str(data.model) ?? 'copilot', parent, start: dur !== undefined ? ev.ts - dur : ev.ts, end: ev.ts, dur,
-    durSrc: dur !== undefined ? 'logged:assistant.usage.duration' : 'unknown', status: 'ok', firstEvent: ev.id, lastEvent: ev.id,
+    durSrc: dur !== undefined ? `logged:${durationField}` : 'unknown', status: 'ok', firstEvent: ev.id, lastEvent: ev.id,
     attrs: { llm: ev.attrs.llm, tokens: ev.attrs.tokens },
   });
 }
 
 function decode(type: string, d: any): Decoded | undefined {
   switch (type) {
+    case 'session.usage_record':
+      return d.usage && typeof d.usage === 'object' && !Array.isArray(d.usage) ? decode('assistant.usage', d.usage) : undefined;
+    case 'system.message': {
+      const text = str(d.content) ?? '';
+      return { kind: 'context.snapshot', actor: 'system', summary: words(d.role ?? 'system', `prompt (${text.length} chars)`),
+        attrs: { text: truncate(text, INDEX_TEXT_MAX), text_len: text.length, context: { type: 'system-prompt', role: str(d.role) } } };
+    }
+    case 'skill.invoked': {
+      const text = str(d.content) ?? '';
+      return { kind: 'context.attachment', actor: 'harness', summary: words('skill', d.name),
+        attrs: { text: truncate(text, INDEX_TEXT_MAX), text_len: text.length,
+          context: { type: 'skill', name: str(d.name), path: str(d.path), source: str(d.source) }, llm: { model: str(d.model) } } };
+    }
+    case 'skill.context_delivered_ref':
+      return { kind: 'context.attachment', actor: 'harness', summary: 'skill context reference',
+        attrs: { context: { type: 'skill-reference', content_id: str(d.contentId), source: str(d.source) } } };
     case 'session.start':
     case 'session.resume':
       return {
