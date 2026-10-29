@@ -67,21 +67,21 @@ const KNOWN: Record<AgentKind, Known> = {
     'permission-decisions': ['partial', 'Approval policy per turn and guardian reviews; codex.tool_decision only through OpenTelemetry.'],
   },
   copilot: {
-    timestamps: ['partial', 'One timestamp per request.'],
-    'llm-latency': ['logged', 'result.timings.totalElapsed per request.'],
-    ttft: ['logged', 'result.timings.firstProgress per request.'],
-    'tool-durations': ['absent', 'Tool call rounds carry no timing.'],
-    'exit-codes': ['absent', 'Tool results carry no exit codes.'],
-    'token-usage': ['absent', 'Chat session files carry no token counts.'],
-    'cache-tokens': ['absent', 'Chat session files carry no token counts.'],
-    'reasoning-text': ['absent', 'No reasoning content is stored.'],
-    'system-prompt': ['absent', 'The system prompt is not stored.'],
+    timestamps: ['partial', 'Chat-session documents: one timestamp per request; CLI and newer VS Code agent logs: every event.'],
+    'llm-latency': ['logged', 'Chat-session result.timings.totalElapsed (elapsedMs); agent session.usage_record.usage.duration or retained assistant.usage.duration.'],
+    ttft: ['logged', 'Chat-session result.timings.firstProgress; agent usage.timeToFirstTokenMs when recorded.'],
+    'tool-durations': ['partial', 'Agent-mode tool parts log start and end; agent event logs pair tool starts and completions. Elapsed time can include approval waits.'],
+    'exit-codes': ['partial', 'Terminal tool parts and agent shellExecution.exitCode; other tool results carry none.'],
+    'token-usage': ['partial', 'Chat-session promptTokens and completionTokens; agent session.usage_record.usage or retained assistant.usage. Older logs may lack usage.'],
+    'cache-tokens': ['partial', 'Agent usage records report cache reads and writes when recorded.'],
+    'reasoning-text': ['partial', 'Agent assistant.reasoning events; chat-session documents store none.'],
+    'system-prompt': ['partial', 'Newer agent logs include system.message and skill context; chat-session documents omit the system prompt.'],
     'tool-definitions': ['absent', 'Tool definitions are not stored.'],
-    'subagent-tree': ['absent', 'Copilot Chat sessions have no subagents.'],
-    'file-diffs': ['partial', 'textEditGroup responses and chatEditingSessions snapshots (not parsed).'],
-    cost: ['absent', 'No cost is stored.'],
+    'subagent-tree': ['partial', 'Agent subagent events stay in the parent session, nested under the task call; chat-session documents have none.'],
+    'file-diffs': ['partial', 'textEditGroup responses, chatEditingSessions snapshots and CLI fileEdits (not parsed).'],
+    cost: ['absent', 'No cost is stored; the CLI counts premium requests at shutdown.'],
     'raw-http': ['absent', 'Requests and responses are not stored.'],
-    'permission-decisions': ['absent', 'No permission records are stored.'],
+    'permission-decisions': ['partial', 'Agent permission.requested and permission.completed events; chat-session documents store none.'],
   },
   antigravity: {
     timestamps: ['logged', 'Every step records when it was created; tool steps also record start and completion.'],
@@ -100,6 +100,7 @@ const KNOWN: Record<AgentKind, Known> = {
     'raw-http': ['absent', 'Requests and responses are not stored.'],
     'permission-decisions': ['partial', 'Requested and completed interactions on tool steps; automatic approvals leave none.'],
   },
+
 };
 
 interface AgentDef {
@@ -131,9 +132,9 @@ const AGENTS: AgentDef[] = [
   },
   {
     agent: 'copilot',
-    label: 'GitHub Copilot Chat (VS Code)',
-    roots: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'workspaceStorage'), join(e.appSupport, 'Code', 'User', 'globalStorage', 'emptyWindowChatSessions')],
-    detect: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'globalStorage', 'github.copilot-chat')],
+    label: 'GitHub Copilot (VS Code Chat, CLI)',
+    roots: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'workspaceStorage'), join(e.appSupport, 'Code', 'User', 'globalStorage', 'emptyWindowChatSessions'), join(e.home, '.copilot', 'session-state')],
+    detect: (e) => e.autoDiscover === false ? [] : [join(e.appSupport, 'Code', 'User', 'globalStorage', 'github.copilot-chat'), join(e.home, '.copilot')],
   },
   {
     agent: 'antigravity',
@@ -150,12 +151,6 @@ const OTHER_AGENTS: { agent: string; label: string; paths: (e: DiscoverEnv) => s
     label: 'ChatGPT desktop',
     paths: (e) => [join(e.appSupport, 'com.openai.chat')],
     detail: 'The conversation cache (conversations-v3-*/*.data) is encrypted with a key held in the Keychain.',
-  },
-  {
-    agent: 'copilot-cli',
-    label: 'GitHub Copilot CLI',
-    paths: (e) => [join(e.home, '.copilot', 'logs')],
-    detail: 'Only process lifecycle logs are written; no conversations are stored.',
   },
   { agent: 'gemini-cli', label: 'Gemini CLI', paths: (e) => [join(e.home, '.gemini', 'tmp')], detail: 'AgentShark v1 has no Gemini CLI adapter.' },
   { agent: 'cursor', label: 'Cursor', paths: (e) => [join(e.home, '.cursor'), join(e.appSupport, 'Cursor')], detail: 'AgentShark v1 has no Cursor adapter.' },
@@ -463,6 +458,11 @@ async function findings(def: AgentDef, m: Measures, env: DiscoverEnv, captured: 
     severity: 'note',
     title: 'Partial Antigravity trajectory support',
     detail: 'AgentShark reads conversation .db files, not older encrypted .pb files. Rows still in the write-ahead log appear after Antigravity checkpoints them. Database events have selected decoded metadata but no raw source line.',
+  });
+  if (def.agent === 'copilot') out.push({
+    severity: 'note', title: 'Copilot support is partial',
+    detail: 'Reads VS Code JSON and JSONL chat sessions and shared CLI/newer VS Code agent session-state logs. Newer agent logs persist per-call usage; older logs can lack tokens and model latency. Tool output can also be omitted. File edit snapshots are not decoded; cloud coding-agent sessions are not downloaded.',
+    recommendation: captured ? undefined : DURABLE_CAPTURE,
   });
   if (m.missing > 0) {
     out.push({

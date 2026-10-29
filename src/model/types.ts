@@ -21,7 +21,8 @@ export type SourceKind =
   | 'audit' // Cowork audit.jsonl
   | 'registry' // desktop session registry JSON (local_*.json)
   | 'state-db' // Codex state_5.sqlite
-  | 'chat-session' // VS Code Copilot chat session JSON
+  | 'chat-session' // VS Code Copilot chat session JSON or mutation log
+  | 'session-events' // Copilot CLI session-state events.jsonl
   | 'trajectory-db'; // Antigravity conversation SQLite (conversations/<id>.db)
 
 export type SessionRole = 'main' | 'subagent' | 'workflow-agent' | 'guardian' | 'review' | 'fork' | 'automation';
