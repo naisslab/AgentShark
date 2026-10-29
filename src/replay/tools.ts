@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto';
 import { posix as path } from 'node:path';
 import type { ExecResult, Executor } from './executor.ts';
 import { applyChunks, PatchError, parsePatch } from './patch.ts';
-import type { Action } from './plan.ts';
+import type { Action, PlannedCall } from './plan.ts';
+import { programsOf } from './shell.ts';
 
 export type RunAction = Exclude<Action, { cls: 'skip' }>;
 
@@ -165,4 +166,22 @@ async function writeFile(sb: Sandbox, p: string, text: string): Promise<string |
 
 function stderrOf(r: ExecResult): string {
   return r.stderr.toString('utf8').trim();
+}
+
+// ---------------------------------------------------------------------------
+// Preflight (§4.1)
+
+/** Programs that the plan's shell calls start and the sandbox lacks, each with the number of calls that start it. */
+export async function missingPrograms(calls: PlannedCall[], sb: Sandbox): Promise<{ name: string; calls: number }[]> {
+  const uses = new Map<string, number>();
+  for (const c of calls) {
+    if (c.action.cls !== 'shell' && c.action.cls !== 'shell-bg') continue;
+    for (const p of programsOf(c.action.script)) uses.set(p, (uses.get(p) ?? 0) + 1);
+  }
+  if (!uses.size) return [];
+  const script = 'for c in "$@"; do command -v "$c" >/dev/null 2>&1 || echo "$c"; done';
+  const r = await sb.exec.exec([sb.shell, '-c', script, 'sh', ...uses.keys()]);
+  if (r.exitCode !== 0) return [];
+  return r.stdout.toString('utf8').split('\n').filter((n) => uses.has(n))
+    .map((name) => ({ name, calls: uses.get(name)! })).sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name));
 }

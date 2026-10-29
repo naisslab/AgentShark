@@ -3,7 +3,8 @@
 import { stripVTControlCharacters } from 'node:util';
 import type { CallClass, RecordedResult } from './plan.ts';
 
-export type Verdict = 'same' | 'output' | 'status' | 'unrecorded' | 'started' | 'skipped' | 'error';
+export const VERDICTS = ['same', 'output', 'status', 'unrecorded', 'started', 'skipped', 'error'] as const;
+export type Verdict = (typeof VERDICTS)[number];
 
 interface Status {
   ok: boolean;

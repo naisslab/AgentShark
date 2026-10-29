@@ -218,7 +218,9 @@ Default captures retain private text and raw records. For sharing, preview the r
 
 ## Replay a Session
 
-`agentshark replay SESSION --dry-run` shows which recorded actions can run again. To execute the plan, supply the starting files with `--workspace DIR`; replay needs Docker and runs without network by default. It calls no model and compares new results with the recording. [Replay commands and limits](docs/REPLAY.md).
+`agentshark replay SESSION --dry-run` shows which recorded actions can run again. To execute the plan, supply the starting files with `--workspace DIR`; replay needs Docker and runs without network by default. It calls no model and compares new results with the recording.
+
+A replay works like an emulator. On a terminal you can pause it, step one batch at a time, open a shell in its container and save the state as an image. `--break status` stops at the first status difference, and `agentshark replay --resume NAME` continues a stopped replay or starts again from a saved image. Before the first call, the header lists the programs that the recorded commands start and the image lacks. [Replay commands and limits](docs/REPLAY.md).
 
 ## Workbench for Engineers and Researchers
 
