@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Parse Copilot CLI and newer VS Code agent session-state events, including persisted usage, context, timed tools and shell exits, alongside VS Code JSONL chat logs. Link agent messages, usage and tools by call ID for accurate steps. Index version 5 reparses older sources; analysis version 15 leaves Copilot context-window capacity unknown.
+
 - Bundle the JavaScript engine and Node runtime in the macOS application. Discover supported local Claude and Codex sources automatically, with explicit folder selection and an isolated demo.
 - Add the Workbench: context inspection, run comparison, behavioral checks, coordination, change verification, sequence search, dependency profiling, and reviewed dataset export.
 - Add experiment manifests, annotations, cohort summaries, table exports, investigation documents, and offline OTLP/OpenInference conversion.

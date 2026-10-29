@@ -191,7 +191,8 @@ function finishSession(d: Derived, s: Ses, drafts: Draft[], rows: StepRow[]): vo
     }
   });
   // Claude's context window is not logged: 1M if the session ever goes above 200k tokens, else 200k.
-  const claudeWindow = s.agent === 'codex' ? null : rows.some((r) => (r.ctxTokens ?? 0) > 200_000) ? 1_000_000 : 200_000;
+  const claudeWindow = s.agent === 'claude-code' || s.agent === 'claude-cowork'
+    ? rows.some((r) => (r.ctxTokens ?? 0) > 200_000) ? 1_000_000 : 200_000 : null;
   const compactions = s.events.filter((e) => e.kind === 'context.compaction').map((e) => e.seq);
   let prevEnd = -Infinity;
   rows.forEach((r, i) => {

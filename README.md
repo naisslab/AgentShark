@@ -134,10 +134,13 @@ If linking fails with a permission error, use `node /absolute/path/to/agentshark
 | Claude desktop registries (`local_*.json`) | Metadata only | Titles, models, permission mode, worktrees and pull requests; sessions whose transcripts were deleted |
 | Codex rollouts (`~/.codex/sessions`, `archived_sessions`): CLI, Desktop, exec, VS Code | Fully parsed | Every envelope and legacy record type; continuation pages, child threads, zstd-compressed (`.jsonl.zst`) rollouts |
 | Codex `state_5.sqlite` | Metadata only | Titles, archive state, spawn edges |
-| GitHub Copilot Chat in VS Code (`chatSessions/*.json`) | Partially parsed | Prompts, responses, request timing and tool calls (which carry no timing of their own); edits are not decoded |
-| Google Antigravity, ChatGPT desktop, Copilot CLI, Gemini CLI, Cursor, Windsurf, Ollama, opencode | Detected, not parsed | `agentshark sources` reports that the agent is installed and why its logs cannot be read |
+| GitHub Copilot Chat documents (`chatSessions/*.json` and `*.jsonl`) | Partially parsed | Prompts, responses, request timing, logged token counts and agent-mode tool calls with timing and terminal exit codes; edit snapshots are not decoded |
+| GitHub Copilot CLI and newer VS Code agents (`~/.copilot/session-state`) | Partially parsed | Prompts, responses, reasoning, tools, permissions, hooks, subagent and context events; persisted per-call usage, cache tokens and latency when recorded |
+| Google Antigravity, ChatGPT desktop, Gemini CLI, Cursor, Windsurf, Ollama, opencode | Detected, not parsed | `agentshark sources` reports that the agent is installed and why its logs cannot be read |
 
 AgentShark keeps records it does not understand as `raw.unknown` events with their full source line, so nothing is dropped silently; keeping a record is not the same as decoding it. `agentshark sources` (the Sources workspace in the viewer) measures which capabilities the logs on this machine actually provide for each agent: timestamps, latencies, exit codes, token usage, reasoning text and more.
+
+Copilot support reads existing local logs. To preserve those sessions, run `agentshark index --agent cp`, then `agentshark capture --agent cp -o copilot.agentcap.zst`. Open the capture with `agentshark open copilot.agentcap.zst`. Newer agent logs persist per-call usage; older saved logs may lack token counts and model latency. AgentShark does not download GitHub cloud coding-agent sessions.
 
 ## A Tour of the Viewer
 

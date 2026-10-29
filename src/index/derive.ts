@@ -30,7 +30,7 @@ import { deriveTurns, idleOpenSessions, UNATTENDED_RULE } from './derive/turns.t
 import { DeriveWriter } from './derive/write.ts';
 
 /** Bump when any rule in derive/*.ts changes; stored as meta.analysis_version. */
-export const ANALYSIS_VERSION = 14;
+export const ANALYSIS_VERSION = 15;
 export const SIG_VERSION = SIG_RULE;
 
 export interface DeriveOptions {
