@@ -60,6 +60,7 @@ enum Symbols {
         case .claudeCowork: return "briefcase"
         case .codex: return "chevron.left.forwardslash.chevron.right"
         case .copilot: return "airplane"
+        case .antigravity: return "arrow.up.circle"
         default: return "cpu"
         }
     }

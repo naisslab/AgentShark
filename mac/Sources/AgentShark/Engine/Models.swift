@@ -25,7 +25,8 @@ struct AgentKind: StringKind {
     static let claudeCowork: AgentKind = "claude-cowork"
     static let codex: AgentKind = "codex"
     static let copilot: AgentKind = "copilot"
-    static let known: [AgentKind] = [.claudeCode, .claudeCowork, .codex, .copilot]
+    static let antigravity: AgentKind = "antigravity"
+    static let known: [AgentKind] = [.claudeCode, .claudeCowork, .codex, .copilot, .antigravity]
 
     var label: String {
         switch self {
@@ -33,17 +34,19 @@ struct AgentKind: StringKind {
         case .claudeCowork: return "Claude Cowork"
         case .codex: return "Codex"
         case .copilot: return "Copilot"
+        case .antigravity: return "Antigravity"
         default: return rawValue
         }
     }
 
-    /// Session ID prefix (`cc`, `cw`, `cx`, `cp`).
+    /// Session ID prefix (`cc`, `cw`, `cx`, `cp`, `ag`).
     var prefix: String {
         switch self {
         case .claudeCode: return "cc"
         case .claudeCowork: return "cw"
         case .codex: return "cx"
         case .copilot: return "cp"
+        case .antigravity: return "ag"
         default: return rawValue
         }
     }

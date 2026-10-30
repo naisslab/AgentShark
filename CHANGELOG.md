@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Read Google Antigravity conversations (`~/.gemini/antigravity/conversations/*.db`) as a new agent, `ag`: prompts, responses, model calls with logged latency, time to first token and tokens, tool calls with timing, exit codes and permission prompts, and subagent links.
 - Parse Copilot CLI and newer VS Code agent session-state events, including persisted usage, context, timed tools and shell exits, alongside VS Code JSONL chat logs. Link agent messages, usage and tools by call ID for accurate steps. Index version 5 reparses older sources; analysis version 15 leaves Copilot context-window capacity unknown.
 
 - Bundle the JavaScript engine and Node runtime in the macOS application. Discover supported local Claude and Codex sources automatically, with explicit folder selection and an isolated demo.

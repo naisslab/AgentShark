@@ -85,7 +85,7 @@ function attr(name: string, type: FieldType, description: string, more: Partial<
 }
 
 /**
- * The agent of an event's session, read from the session id prefix (SPEC §3.1: cc, cw, cx, cp). The prefix is part of
+ * The agent of an event's session, read from the session id prefix (SPEC §3.1: cc, cw, cx, cp, ag). The prefix is part of
  * ev_ts, so agent filters need neither a join nor a table row.
  */
 export const AGENT_SQL = `CASE substr(e.session_id, 1, 3) ${Object.entries(AGENT_PREFIX).map(([agent, prefix]) => `WHEN '${prefix}:' THEN '${agent}'`).join(' ')} END`;
@@ -110,7 +110,7 @@ const FIELD_LIST: FieldDef[] = [
   col('summary', 'string', 'e.summary', 'Summary column text: one human-readable line', NOT_NULL),
   col('session', 'string', 'e.session_id', 'Session ID; the bare word session matches session.* events', NOT_NULL),
   col('session.id', 'string', 'e.session_id', 'Session ID', NOT_NULL),
-  col('agent', 'enum', AGENT_SQL, 'Agent that wrote the session (cc, cw, cx, cp also accepted); the bare word agent matches agent.* events', { values: AGENTS, aliases: AGENT_ALIASES }),
+  col('agent', 'enum', AGENT_SQL, 'Agent that wrote the session (cc, cw, cx, cp, ag also accepted); the bare word agent matches agent.* events', { values: AGENTS, aliases: AGENT_ALIASES }),
   col('session.agent', 'enum', AGENT_SQL, 'Agent that wrote the session', { values: AGENTS, aliases: AGENT_ALIASES }),
   col('session.role', 'enum', 's.role', 'Session role', { ...SESSION, values: ROLES }),
   col('session.state', 'enum', 's.state', 'Session state', { ...SESSION, values: STATES }),

@@ -25,7 +25,7 @@ interface CommandSpec {
 }
 
 const INDEX_OPT: OptionSpec = { type: 'string', arg: 'PATH', help: 'index database (default ~/.agentshark/index.sqlite or $AGENTSHARK_HOME)' };
-const AGENT_OPT: OptionSpec = { type: 'string', multiple: true, arg: 'cc|cw|cx|cp', help: 'only this agent; repeat or comma-separate for several' };
+const AGENT_OPT: OptionSpec = { type: 'string', multiple: true, arg: 'cc|cw|cx|cp|ag', help: 'only this agent; repeat or comma-separate for several' };
 const FILTER_OPT: OptionSpec = { type: 'string', short: 'f', arg: 'EXPR', help: 'display filter, e.g. \'tool.name == "Bash" && dur > 2s\'' };
 const SESSION_OPT: OptionSpec = { type: 'string', short: 's', multiple: true, arg: 'ID', help: 'only this session and its subagents (repeatable)' };
 const JSON_OPT: OptionSpec = { type: 'boolean', help: 'machine-readable output' };
@@ -47,8 +47,8 @@ export const COMMANDS: CommandSpec[] = [
       index: INDEX_OPT,
     },
     details:
-      'The first run indexes every supported log on this machine (Claude Code, Claude Cowork, Codex, Copilot Chat); later runs\n' +
-      're-parse only changed files. The index lives in ~/.agentshark/index.sqlite (or $AGENTSHARK_HOME). Press Ctrl+C to stop.',
+      'The first run indexes every supported log on this machine (Claude Code, Claude Cowork, Codex, Copilot Chat, Antigravity);\n' +
+      'later runs re-parse only changed files. The index lives in ~/.agentshark/index.sqlite (or $AGENTSHARK_HOME). Press Ctrl+C to stop.',
     run: async (a) => (await import('./serve.ts')).serve(a),
   },
   {
@@ -163,7 +163,7 @@ export const COMMANDS: CommandSpec[] = [
   {
     name: 'index',
     summary: 'build or update the live index',
-    usage: 'agentshark index [--full | --rederive] [--agent cc|cw|cx|cp] [--index PATH]',
+    usage: 'agentshark index [--full | --rederive] [--agent cc|cw|cx|cp|ag] [--index PATH]',
     options: {
       full: { type: 'boolean', help: 're-parse every source, not only changed ones' },
       rederive: { type: 'boolean', help: 're-derive the analysis tables (steps, failures, episodes, ...) without re-parsing' },

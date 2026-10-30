@@ -12,6 +12,10 @@ The raw reader verifies that indexed prefix before serving evidence. Appends are
 
 ## Normalized Semantics
 
+The Antigravity adapter reads `conversations/*.db` under `~/.gemini/antigravity` and `~/.gemini/antigravity-ide`. It prefers the app copy when both folders contain the same conversation filename. The adapter uses protobuf field numbers from the installed language server's descriptors, so support remains partial and version-dependent. Older encrypted `.pb` conversations are excluded.
+
+Databases open with `immutable=1`: uncheckpointed WAL rows are not visible. Antigravity events reference the database and step index with a zero-length raw reference. The detail view contains selected decoded metadata, not a recoverable raw step. Unsupported step types emit `raw.unknown`; malformed rows emit diagnostics while other rows remain readable. Unchanged database files use size, modification time and inode for incremental indexing, as Codex state databases do. Changes only to `conversation_summaries.db` appear when the conversation is reparsed, including with `index --full`.
+
 Use integer UTC microseconds for timestamps and durations. Mark whether a timestamp or duration is logged, derived or unknown. Missing usage stays missing; it is not zero. Distinguish inherited context, mirrored records and newly executed work before aggregating. Pair tool calls and results through logged identifiers when available, and retain unpaired records with diagnostics.
 
 Do not turn command text, filenames or quoted error examples into observed failures. Logged error flags and process exits are structural observations. Text-based classifications are heuristics and need labeled positive and negative fixtures. The rule registry reports empirical audits separately from deterministic behavior; synthetic regression checks do not establish population precision.

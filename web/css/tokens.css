@@ -41,6 +41,7 @@
   --agent-cowork: #8a5a2b;
   --agent-codex: #3556c8;
   --agent-copilot: #6f42c1;
+  --agent-antigravity: #1a7f4b;
 
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -171,6 +172,7 @@
     --agent-cowork: #d4a574;
     --agent-codex: #8aa4f7;
     --agent-copilot: #ad93f2;
+    --agent-antigravity: #6fcf97;
 
     --tier-failure: #ff7b72;
     --tier-suspect: #ff7b72;
@@ -233,6 +235,7 @@
   --agent-cowork: #d4a574;
   --agent-codex: #8aa4f7;
   --agent-copilot: #ad93f2;
+  --agent-antigravity: #6fcf97;
 
   --tier-failure: #ff7b72;
   --tier-suspect: #ff7b72;

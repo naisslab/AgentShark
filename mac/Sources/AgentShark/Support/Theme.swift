@@ -64,6 +64,7 @@ enum Theme {
         case .claudeCowork: return dynamic(0x8A5A2B, 0xD4A574)
         case .codex: return dynamic(0x3556C8, 0x8AA4F7)
         case .copilot: return dynamic(0x6F42C1, 0xAD93F2)
+        case .antigravity: return dynamic(0x1A7F4B, 0x6FCF97)
         default: return .secondaryLabelColor
         }
     }

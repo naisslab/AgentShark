@@ -441,17 +441,22 @@ export const INDEX_INPUT_MAX_STRING = 1024;
 // ---------------------------------------------------------------------------
 // Tools
 
-// Copilot names follow the Claude and Codex ones (the CLI's built-in tools, then VS Code agent mode's).
+// Built-in tool names across Claude, Codex, Copilot and Antigravity.
 const SHELL_TOOLS = new Set(['Bash', 'BashOutput', 'KillShell', 'KillBash', 'exec_command', 'write_stdin', 'shell_command', 'shell', 'local_shell', 'mcp__workspace__bash',
-  'bash', 'read_bash', 'write_bash', 'stop_bash', 'list_bash', 'powershell', 'run_in_terminal', 'get_terminal_output']);
+  'bash', 'read_bash', 'write_bash', 'stop_bash', 'list_bash', 'powershell', 'run_in_terminal', 'get_terminal_output',
+  'run_command', 'command_status', 'send_command_input', 'read_terminal']);
 const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'apply_patch', 'view_image',
   'view', 'create', 'edit', 'str_replace_editor', 'glob', 'grep',
-  'read_file', 'create_file', 'replace_string_in_file', 'multi_replace_string_in_file', 'insert_edit_into_file', 'file_search', 'grep_search', 'list_dir', 'copilot_readFile']);
-const WEB_TOOLS = new Set(['WebFetch', 'WebSearch', 'web_search', 'web_search_call', 'mcp__workspace__web_fetch', 'web_fetch', 'fetch_webpage']);
+  'read_file', 'create_file', 'replace_string_in_file', 'multi_replace_string_in_file', 'insert_edit_into_file', 'file_search', 'grep_search', 'list_dir', 'copilot_readFile',
+  'write_file', 'edit_file', 'view_file', 'view_file_outline', 'view_code_item', 'write_to_file', 'replace_file_content', 'multi_replace_file_content', 'find_by_name', 'codebase_search']);
+const WEB_TOOLS = new Set(['WebFetch', 'WebSearch', 'web_search', 'web_search_call', 'mcp__workspace__web_fetch', 'web_fetch', 'fetch_webpage',
+  'search_web', 'read_url_content']);
 const AGENT_TOOLS = new Set(['Agent', 'Task', 'Workflow', 'SendMessage', 'spawn_agent', 'send_message', 'followup_task', 'wait_agent', 'list_agents', 'interrupt_agent', 'close_agent', 'send_input', 'wait',
-  'task', 'runSubagent']);
+  'task', 'runSubagent',
+  'invoke_subagent', 'browser_subagent']);
 const PLAN_TOOLS = new Set(['TodoWrite', 'TodoRead', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TaskOutput', 'update_plan', 'ExitPlanMode', 'EnterPlanMode',
-  'update_todo', 'manage_todo_list']);
+  'update_todo', 'manage_todo_list',
+  'task_boundary', 'manage_task']);
 
 export function toolKind(name: string | undefined, namespace?: string): ToolKindTag {
   if (!name) return 'other';
@@ -513,9 +518,9 @@ export function summarizeToolInput(name: string, input: unknown): string {
   };
   const s =
     pick('command', 'cmd', 'commandLine') ??
-    pick('file_path', 'notebook_path', 'path', 'filePath', 'notebookPath', 'uri', 'dirPath') ??
+    pick('file_path', 'notebook_path', 'path', 'filePath', 'notebookPath', 'uri', 'dirPath', 'absolutePath', 'targetFile', 'directoryPath') ??
     (o.pattern ? `${o.pattern}${o.path ? '  in ' + o.path : ''}` : undefined) ??
-    pick('url', 'query', 'description', 'subject', 'task_name', 'prompt', 'message', 'skill', 'title', 'code', 'chars', 'target', 'explanation', 'filePaths');
+    pick('url', 'query', 'queries', 'description', 'subject', 'task_name', 'prompt', 'message', 'skill', 'title', 'code', 'chars', 'target', 'explanation', 'filePaths');
   if (s) return oneLine(String(s), 160);
   try {
     return oneLine(JSON.stringify(o), 160);

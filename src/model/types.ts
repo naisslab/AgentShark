@@ -2,14 +2,15 @@
 // Semantics are specified in docs/SPEC.md §3; capture framing in docs/FORMAT.md.
 // Times are integer microseconds since the Unix epoch (UTC); durations are integer microseconds.
 
-export type AgentKind = 'claude-code' | 'claude-cowork' | 'codex' | 'copilot';
-export type AgentPrefix = 'cc' | 'cw' | 'cx' | 'cp';
+export type AgentKind = 'claude-code' | 'claude-cowork' | 'codex' | 'copilot' | 'antigravity';
+export type AgentPrefix = 'cc' | 'cw' | 'cx' | 'cp' | 'ag';
 
 export const AGENT_PREFIX: Record<AgentKind, AgentPrefix> = {
   'claude-code': 'cc',
   'claude-cowork': 'cw',
   codex: 'cx',
   copilot: 'cp',
+  antigravity: 'ag',
 };
 
 export type SourceKind =
@@ -21,7 +22,8 @@ export type SourceKind =
   | 'registry' // desktop session registry JSON (local_*.json)
   | 'state-db' // Codex state_5.sqlite
   | 'chat-session' // VS Code Copilot chat session JSON or mutation log
-  | 'session-events'; // Copilot CLI session-state events.jsonl
+  | 'session-events' // Copilot CLI session-state events.jsonl
+  | 'trajectory-db'; // Antigravity conversation SQLite (conversations/<id>.db)
 
 export type SessionRole = 'main' | 'subagent' | 'workflow-agent' | 'guardian' | 'review' | 'fork' | 'automation';
 export type SessionState = 'ok' | 'missing-transcript' | 'source-deleted';

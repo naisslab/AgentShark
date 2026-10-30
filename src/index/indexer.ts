@@ -391,7 +391,7 @@ async function* indexRun(db: DatabaseSync, opts: IndexRunOptions): AsyncGenerato
   const changed = found.filter((f) => {
     const r = byPath.get(f.path);
     return opts.full || !r || !r.exists_now || r.status !== 'ok' || r.size !== f.size || r.mtime_ms !== f.mtimeMs || r.ino !== f.ino
-      || (f.kind !== 'state-db' && !r.sha256);
+      || (f.kind !== 'state-db' && f.kind !== 'trajectory-db' && !r.sha256);
   });
   // Files that depend on each other (Codex continuation pages) are re-parsed together when one changes or vanishes.
   const dirtyGroups = new Set<string>();
