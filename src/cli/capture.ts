@@ -84,6 +84,7 @@ export async function capture(a: Args): Promise<number> {
       filter,
       raw: a.values['no-raw'] !== true,
       sidecars: a.values['no-sidecars'] !== true,
+      resources: a.values['no-resources'] !== true,
       indexPath,
       onProgress: (p) => bar.update(p.done, p.total),
     })

@@ -636,6 +636,11 @@ struct SidebarOutline: NSViewControllerRepresentable {
 
     static func add(to menu: NSMenu, ids: [String], model: WindowModel) {
         let one = ids.count == 1 ? ids[0] : nil
+        menu.addItem("Check Reliability", symbol: SessionMode.reliability.symbol, enabled: one != nil) {
+            guard let one else { return }
+            SidebarLists.shared.noteOpened(one)
+            model.openSession(one, mode: .reliability)
+        }.toolTip = one == nil ? "Select one session to review failure handling and repeated observations." : nil
         menu.addItem("Show Critical Path", symbol: SessionMode.criticalPath.symbol, enabled: one != nil) {
             guard let one else { return }
             SidebarLists.shared.noteOpened(one)

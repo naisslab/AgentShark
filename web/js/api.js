@@ -56,6 +56,8 @@ const put = (path, body) => request('PUT', path, body ?? {});
 
 export const info = () => get('/api/info');
 export const fields = () => get('/api/fields');
+export const resources = (q) => get('/api/resources', q);
+export const bindResourceSession = (session, roots) => post('/api/resources/bind', { session, roots });
 export const validate = (filter) => post('/api/filter/validate', { filter });
 
 /**

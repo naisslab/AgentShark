@@ -27,6 +27,23 @@ extension AnalysisSpec where Value == DiffResult {
     }
 }
 
+extension AnalysisSpec where Value == ReliabilityResult {
+    static func reliability(session: String, policy: ReliabilityPolicy) -> AnalysisSpec {
+        // A sorted exemption list gives equivalent policies the same cache key. JSON keeps tool names and IDs unambiguous.
+        var normalized = policy
+        normalized.allowedRepeatTools = Array(Set(policy.allowedRepeatTools)).sorted()
+        let calls = Array(Set(policy.allowedRepeatCalls ?? [])).sorted {
+            [$0.tool, $0.inputDigest, $0.outputDigest].lexicographicallyPrecedes([$1.tool, $1.inputDigest, $1.outputDigest])
+        }
+        normalized.allowedRepeatCalls = calls.isEmpty ? nil : calls
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let key = "reliability|" + session + "|" + String(decoding: (try? encoder.encode(normalized)) ?? Data(), as: UTF8.self)
+        let sentPolicy = normalized
+        return AnalysisSpec(key: key, runs: [session]) { try await $0.reliability(session: session, policy: sentPolicy) }
+    }
+}
+
 /// What a window's analyses read from the window. The requests observe `workbenchClient` and `indexGeneration`, so a
 /// host whose reads are observable needs no calls when the engine comes up or an index run finishes.
 @MainActor protocol AnalysisHost: AnyObject {
@@ -53,17 +70,19 @@ extension WindowModel: AnalysisHost {
 @MainActor final class WindowAnalyses {
     let perf: AnalysisRequest<PerfResult>
     let diff: AnalysisRequest<DiffResult>
+    let reliability: AnalysisRequest<ReliabilityResult>
 
     init(host: any AnalysisHost, clock: any Clock<Duration> = ContinuousClock()) {
         let gate = AnalysisGate()
         perf = AnalysisRequest(host: host, gate: gate, clock: clock)
         diff = AnalysisRequest(host: host, gate: gate, clock: clock)
+        reliability = AnalysisRequest(host: host, gate: gate, clock: clock)
     }
 
     /// A run's title from the shown Critical Path or Compare result (its `sessions` map, analysis 1.1), which names
     /// every run the result covers whether or not the catalog has loaded it; nil when neither result has a title.
     func runTitle(of session: String) -> String? {
-        perf.value?.sessions?[session]?.title ?? diff.value?.sessions?[session]?.title
+        perf.value?.sessions?[session]?.title ?? diff.value?.sessions?[session]?.title ?? reliability.value?.sessions?[session]?.title
     }
 }
 

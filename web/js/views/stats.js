@@ -5,6 +5,8 @@
 // Drill-down narrows the filter with AND; Replace is an explicit menu choice.
 
 import { createChart, fillSeries, formatValue } from '../lib/chart.js';
+import { createResourcesView, mergeResourceTail, RESOURCE_WINDOW } from './resources.js';
+import { createSessionResourcesView } from './session-resources.js';
 import { BUSY_LABEL, BUSY_ORDER, INTERVAL_LABEL, binTime, createPerfLanes, formatRate, formatShare } from '../lib/perfchart.js';
 import { h, placeholder, autoTitle, showMenu, icon } from '../lib/dom.js';
 import { agentLabel, formatBytes, formatClock, formatDuration, formatInt, formatPercent, formatTokens, formatUsd, plural, shortId, stampTitle, tzOffset } from '../lib/format.js';
@@ -24,6 +26,7 @@ const TABS = [
   { id: 'tools', label: 'Tools' },
   { id: 'models', label: 'Models' },
   { id: 'performance', label: 'Performance' },
+  { id: 'resources', label: 'Resources', scope: true },
   { id: 'turns', label: 'Turns', scope: true },
   { id: 'time', label: 'Time', scope: true, derived: true },
   { id: 'endpoints', label: 'Endpoints', derived: true },
@@ -202,6 +205,15 @@ export default function createStats(root, app) {
   if (!SRT_GROUPS.some((g) => g.id === toolsGroup)) toolsGroup = 'tool';
   let endpointKind = loadPref('stats.endpointKind', '');
   let visible = false;
+  let resourceMode = loadPref('stats.resourceScope', 'session') === 'host' ? 'host' : 'session';
+  let resourceView = null;
+  let resourceData = null;
+  let resourceScopeKey = null;
+  let resourceCursor = null;
+  let resourceRefresh = null;
+  let resourceLoading = false;
+  let resourceRenderKey = null;
+  let nextResourceRefreshAt = 0;
   /** Whether the server serves SRT grouping: null until a request tells (asked again on every show). */
   let srtServed = null;
 
@@ -294,6 +306,10 @@ export default function createStats(root, app) {
     if (TABS.find((t) => t.id === active)?.scope) {
       // Turns and Time read the session set and time range only (SPEC §7.8: each tab states what it honors).
       const sc = app.state.get('scope');
+      if (active === 'resources') {
+        scopeLabel.textContent = resourceMode === 'session' ? 'Session process trees · explicit PID ownership · the display filter does not apply' : 'Whole-host context · overlapping time only · the display filter does not apply';
+        return;
+      }
       const sessions = sc.sessions?.length ? `${exact(sc.sessions.length)} session${sc.sessions.length === 1 ? '' : 's'}` : 'all sessions';
       scopeLabel.replaceChildren(h('b', null, sessions), `${active === 'turns' && (sc.from != null || sc.to != null) ? ' in the time range' : ''} · the display filter does not apply`);
       return;
@@ -360,6 +376,10 @@ export default function createStats(root, app) {
     tools: fetchTools,
     models: () => app.api.stats('models', { view: viewId() }),
     performance: () => app.api.stats('performance', { view: viewId() }),
+    resources: () => {
+      const sc = app.state.get('scope');
+      return app.api.resources({ sessions: sc.sessions, from: sc.from, to: sc.to, scope: resourceMode, limit: RESOURCE_WINDOW, order: 'desc' });
+    },
     turns: fetchTurns,
     time: fetchTime,
     endpoints: () => app.api.statsEndpoints(viewId(), endpointKind || undefined),
@@ -367,7 +387,7 @@ export default function createStats(root, app) {
     io: () => app.api.stats('io', { view: viewId(), metric: ioMetric, interval: INTERVALS[ioInterval] }),
   };
 
-  const RENDER = { summary: renderSummary, kinds: renderKinds, tools: renderTools, models: renderModels, performance: renderPerformance, turns: renderTurns, time: renderTime, endpoints: renderEndpoints, pairs: renderPairs, io: renderIo };
+  const RENDER = { resources: renderResources, summary: renderSummary, kinds: renderKinds, tools: renderTools, models: renderModels, performance: renderPerformance, turns: renderTurns, time: renderTime, endpoints: renderEndpoints, pairs: renderPairs, io: renderIo };
 
   /** What a tab's data depends on besides the view: its own controls, or the scope for the scope tabs. */
   function extraKey(tab) {
@@ -375,6 +395,7 @@ export default function createStats(root, app) {
     if (tab === 'io') return `${ioMetric}|${ioInterval}`;
     if (tab === 'tools') return toolsGroup;
     if (tab === 'endpoints') return endpointKind;
+    if (tab === 'resources') return JSON.stringify([resourceMode, sc.sessions, sc.from, sc.to]);
     if (TABS.find((t) => t.id === tab)?.scope) return JSON.stringify([sc.sessions, sc.from, sc.to, app.state.get('indexVersion')]);
     return '';
   }
@@ -403,20 +424,37 @@ export default function createStats(root, app) {
     if (loadedKey[tab] === key) return;
     loadedKey[tab] = key;
     const seq = (requestSeq[tab] = (requestSeq[tab] ?? 0) + 1);
+    if (tab === 'resources') {
+      resourceLoading = true;
+    }
     if (tab === 'io') chartHost.classList.add('is-loading');
     if (tab === 'performance') {
       perfLanes?.destroy();
       perfLanes = null;
     }
-    target.replaceChildren(placeholder('loading', 'Loading…'));
+    if (tab !== 'resources' || !resourceRenderKey) target.replaceChildren(placeholder('loading', 'Loading…'));
     try {
       const data = await FETCH[tab]();
       if (seq !== requestSeq[tab]) return;
+      if (tab === 'resources') {
+        nextResourceRefreshAt = Date.now() + Math.max(100, data?.recording?.effectiveIntervalMs ?? 5000);
+        const nextKey = JSON.stringify([key, data?.samples?.length, data?.samples?.[0]?.id, data?.samples?.at(-1)?.id, data?.recording,
+          data?.recordings?.map((r) => [r.id, r.health.updatedTs, r.stoppedTs])]);
+        if (resourceRenderKey === nextKey) return;
+        resourceRenderKey = nextKey;
+        resourceView?.destroy();
+        resourceView = null;
+        resourceScopeKey = key;
+        resourceData = { ...data, samples: (data.samples ?? []).slice().reverse().slice(-RESOURCE_WINDOW) };
+        const newest = resourceData.samples.at(-1);
+        resourceCursor = data.cursor ?? (newest ? btoa(JSON.stringify([newest.ts, newest.id])).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') : null);
+      }
       target.replaceChildren();
       RENDER[tab](target, data ?? {});
     } catch (err) {
       if (seq !== requestSeq[tab]) return;
       loadedKey[tab] = null;
+      if (tab === 'resources') resourceRenderKey = null;
       if (app.handleViewError(err)) {
         target.replaceChildren(placeholder('loading', 'The view expired on the server; rebuilding it…'));
         return;
@@ -428,8 +466,43 @@ export default function createStats(root, app) {
         : placeholder('error', 'Could not load these statistics. Your selection is preserved.', String(err?.message ?? err), { label: 'Retry', onClick: () => load(tab) }));
       if (tab === 'io') chart.setData(null);
     } finally {
+      if (seq === requestSeq[tab] && tab === 'resources') resourceLoading = false;
       if (seq === requestSeq[tab] && tab === 'io') chartHost.classList.remove('is-loading');
     }
+  }
+
+  function renderResources(el) {
+    const mode = h('select', { class: 'pn-select', 'aria-label': 'Resource scope' }, h('option', { value: 'session' }, 'Session resources'), h('option', { value: 'host' }, 'Host context'));
+    mode.value = resourceMode;
+    mode.addEventListener('change', () => { resourceMode = mode.value; savePref('stats.resourceScope', resourceMode); updateScope(); loadedKey.resources = null; resourceRenderKey = null; load('resources'); });
+    el.append(h('div', { class: 'st-io-controls' }, h('label', null, 'Scope ', mode)));
+    const body = h('div'); el.append(body);
+    resourceView = (resourceMode === 'session' ? createSessionResourcesView : createResourcesView)(body, app, { sortableTable, formatTime: (t) => `${formatClock(t, { digits: 3 })} ${tzOffset(t)}` });
+    resourceView.update(resourceData);
+  }
+
+  async function refreshResources() {
+    if (resourceLoading || !resourceData?.recording?.enabled || !resourceView) return;
+    const sc = app.state.get('scope');
+    const key = resourceScopeKey;
+    const view = resourceView;
+    const seq = requestSeq.resources;
+    resourceLoading = true;
+    try {
+      const tail = await app.api.resources({ live: true, scope: resourceMode, after: resourceCursor, sessions: sc.sessions, from: sc.from, to: sc.to, limit: 256 });
+      if (resourceScopeKey !== key || resourceView !== view || requestSeq.resources !== seq) return;
+      if (tail.reset) { loadedKey.resources = null; resourceRenderKey = null; return; }
+      resourceCursor = tail.cursor ?? resourceCursor;
+      const recordings = new Map((resourceData.recordings ?? []).map((r) => [r.id, r]));
+      for (const r of tail.recordings ?? []) recordings.set(r.id, r);
+      resourceData = { ...resourceData, recording: tail.recording, samples: mergeResourceTail(resourceData.samples, tail.samples ?? []), recordings: [...recordings.values()].slice(-64) };
+      resourceView.update(resourceData);
+      nextResourceRefreshAt = Date.now() + Math.max(0, (tail.recording?.effectiveIntervalMs ?? 100) - 100);
+    } catch (err) {
+      // Keep the last valid chart visible. Retry with bounded backoff after a network failure.
+      if (resourceView === view && requestSeq.resources === seq) resourceView.connectionError();
+      nextResourceRefreshAt = Date.now() + 2000;
+    } finally { resourceLoading = false; }
   }
 
   // ---- Summary
@@ -1220,6 +1293,13 @@ export default function createStats(root, app) {
   return {
     show() {
       visible = true;
+      clearInterval(resourceRefresh);
+      resourceRefresh = setInterval(() => {
+        if (visible && active === 'resources' && !document.hidden && !resourceLoading && Date.now() >= nextResourceRefreshAt && app.state.get('info')?.mode !== 'capture') {
+          if (resourceRenderKey && resourceData?.recording?.enabled) refreshResources();
+          else { loadedKey.resources = null; load('resources'); }
+        }
+      }, 100);
       srtServed = null;
       metricOptions();
       ioMetric = metricSel.value;
@@ -1228,6 +1308,7 @@ export default function createStats(root, app) {
     },
     hide() {
       visible = false;
+      clearInterval(resourceRefresh);
     },
   };
 }

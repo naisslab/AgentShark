@@ -34,6 +34,22 @@ import SwiftUI
     }
 
     static let shots: [Shot] = [
+        Shot(name: "reliability-handling", settle: 1.5, fresh: true, prepare: { m in
+            guard let r = fixture("reliability-v1.2", ReliabilityResult.self) else { return }
+            clear(m)
+            m.reliabilityModel.policy = r.policy
+            m.openSession(r.sessionId, mode: .reliability)
+            m.showDerivedInspector = false
+            let key = AnalysisSpec<ReliabilityResult>.reliability(session: r.sessionId, policy: r.policy).key
+            m.panels.request(key, ReliabilityResult.self).load(key: key, force: true) { r }
+        }, ready: { m in m.analyses.reliability.value?.failureHandling.isEmpty == false && m.reliabilityModel.selected?.category == .handling }),
+        Shot(name: "reliability", settle: 1.5, fresh: true, prepare: { m in open(m, "/goal Ship the release", mode: .reliability) }, ready: { m in
+            open(m, "/goal Ship the release", mode: .reliability) && m.analyses.reliability.value?.noProgress.isEmpty == false
+        }),
+        Shot(name: "reliability-source", settle: 1.5, fresh: true, prepare: { m in open(m, "/goal Ship the release", mode: .reliability, inspector: true) }, ready: { m in
+            open(m, "/goal Ship the release", mode: .reliability, inspector: true)
+                && m.analyses.reliability.value != nil && m.eventDetail?.event.id == m.reliabilityModel.selectedEvidence?.eventId
+        }),
         // The default layouts (DESIGN.md §8.2): the inspector is hidden in Failures and Session · Steps.
         Shot(name: "failures-lens", prepare: { m in
             m.workspace = .failures

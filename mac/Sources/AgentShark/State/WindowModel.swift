@@ -161,6 +161,7 @@ import Observation
     @ObservationIgnored private(set) lazy var criticalPathModel = CriticalPathModel(window: self)
     /// Session · Compare's result, chips, folds and selection.
     @ObservationIgnored private(set) lazy var compareModel = CompareModel(window: self)
+    let reliabilityModel = ReliabilityModel()
     /// Statistics results per view and section, so re-entering a section does not compute it again.
     let panels = PanelCache()
 
@@ -615,6 +616,8 @@ import Observation
                 .compactMap { $0 }.joined(separator: " · ")
         case .criticalPath:
             return "Critical path · " + runLabel(of: id)
+        case .reliability:
+            return "Reliability · " + runLabel(of: id)
         case .compare:
             return compareScopeLabel()
         }
@@ -624,7 +627,7 @@ import Observation
     /// the scope applies.
     func sessionScopeHelp(_ mode: SessionMode) -> String? {
         switch mode {
-        case .criticalPath: return "Whole run: the filter and time range do not apply. Subagents are always included."
+        case .criticalPath, .reliability: return "Whole run: the filter and time range do not apply. Subagents are always included."
         case .compare: return "Whole runs: the filter and time range do not apply."
         case .steps, .transcript, .flow: return nil
         }

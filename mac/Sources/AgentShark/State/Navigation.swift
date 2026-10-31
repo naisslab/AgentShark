@@ -60,7 +60,7 @@ enum Workspace: String, CaseIterable, Codable, Hashable, Sendable, Identifiable 
 /// The Session workspace's modes (SPEC §12.7): Steps, the former Conversation (Transcript), Flow, Critical Path
 /// (AgentPerf) and Compare (AgentDiff), bound to ⌥⌘1–⌥⌘5 in that order.
 enum SessionMode: String, CaseIterable, Codable, Hashable, Sendable {
-    case steps, transcript, flow, criticalPath, compare
+    case steps, transcript, flow, criticalPath, compare, reliability
 
     var title: String {
         switch self {
@@ -69,6 +69,7 @@ enum SessionMode: String, CaseIterable, Codable, Hashable, Sendable {
         case .flow: return "Flow"
         case .criticalPath: return "Critical Path"
         case .compare: return "Compare"
+        case .reliability: return "Reliability"
         }
     }
 
@@ -78,6 +79,7 @@ enum SessionMode: String, CaseIterable, Codable, Hashable, Sendable {
         switch self {
         case .criticalPath: return "Critical Path (AgentPerf)"
         case .compare: return "Compare Runs (AgentDiff)"
+        case .reliability: return "Reliability Checks"
         case .steps, .transcript, .flow: return title
         }
     }
@@ -89,6 +91,7 @@ enum SessionMode: String, CaseIterable, Codable, Hashable, Sendable {
         case .flow: return "arrow.left.arrow.right"
         case .criticalPath: return "point.topleft.down.to.point.bottomright.curvepath"
         case .compare: return "square.split.2x1"
+        case .reliability: return "checkmark.shield"
         }
     }
 
@@ -98,7 +101,7 @@ enum SessionMode: String, CaseIterable, Codable, Hashable, Sendable {
     /// The filter highlights and dims Steps; the other modes do not use it.
     var honorsFilter: Bool { self == .steps }
     /// The mode lays out the detail and raw panes (⌥⌘I) beside its main pane, where they show the selection.
-    var hasDerivedInspector: Bool { self == .steps || self == .criticalPath || self == .compare }
+    var hasDerivedInspector: Bool { self == .steps || self == .criticalPath || self == .compare || self == .reliability }
 }
 
 /// Session · Compare's choices (ANALYSIS-UX §5.1, §5.3), kept in history so Back restores them. Runs A and B come from

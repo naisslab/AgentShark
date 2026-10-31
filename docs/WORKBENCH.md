@@ -2,7 +2,7 @@
 
 The Workbench serves engineers debugging runs and researchers building trace datasets. It reads the indexed record of an execution. It does not run agent commands, infer a hidden prompt, or use a model to judge task success. Running recorded commands again is `agentshark replay` ([REPLAY.md](REPLAY.md)); the Workbench shows a replay's plan before it runs and its report after.
 
-Open Workbench from the web viewer's toolbar, or in the macOS application with Analyze ▸ Open Research Tools in Browser, which opens it in the default browser, where downloads and file inputs work. The Mac draws two of the tools natively: Critical Path (AgentPerf) and Compare Runs (AgentDiff) are its Session modes Critical Path (⌥⌘4) and Compare (⌥⌘5), which read the run selected in the sidebar. Analyze ▸ Explore Bundled Demo opens the Workbench of a synthetic sample in a window of its own.
+Open Workbench from the web viewer's toolbar, or in the macOS application with Analyze ▸ Open Research Tools in Browser, which opens it in the default browser, where downloads and file inputs work. The Mac draws three analyses natively as Session modes: Critical Path (⌥⌘4), Compare (⌥⌘5), and Reliability (⌥⌘6). Analyze ▸ Explore Bundled Demo opens the Workbench of a synthetic sample in a window of its own.
 
 Select a session, choose an analysis and click **Run Analysis**. Follow its evidence links back to the event viewer. Each link opens the viewer in a new tab, so the result stays on the page. Saved recipes contain a request, not copies of trace records. Browser recipes stay in local storage; export a recipe JSON file to keep or share it. A loaded recipe's `session`, `sessions`, `left` and `right` set the session pickers, which always decide those four fields over the Advanced Request JSON. Human labels remain in memory until downloaded.
 
@@ -13,7 +13,7 @@ The page lists its tools by the question they answer and opens on Critical Path:
 | Where did the time go? | Critical Path (`perf`), Cache Anatomy (`cache`), Span Dependencies (`profile`) |
 | What did the agent see and change? | Context Inspector (`context`), Change and Verification (`verification`), Localization Map (`localization`), Capability Envelope (`capabilities`) |
 | Two runs | Compare Runs (`diff`), Compare Records (`compare`) |
-| Patterns and checks | Sequence Search (`search`), Behavioral Checks (`checks`), Agent Coordination (`coordination`) |
+| Patterns and checks | Reliability Checks (`reliability`), Sequence Search (`search`), Behavioral Checks (`checks`), Agent Coordination (`coordination`) |
 | Datasets and export | Dataset Builder (`dataset`), Research Cohorts (`cohort`), Table Export (`exportTable`), Telemetry Export (`exportTelemetry`) |
 | Investigation and replay | Investigation (`investigation`), Replay Plan (`replayPlan`), Replay Report (`replayReport`) |
 
@@ -84,6 +84,51 @@ agentshark check --session 'cx:SESSION' --input checks.json --out check-report.j
 Exit codes are **0 pass**, **1 fail**, **2 invalid request**, and **3 unknown**. Any failure takes precedence over unknown results. An empty result never passes. Unknown token counts, missing completion evidence, trace gaps and missing verification can prevent a pass. A recorded exceedance or explicit unsuccessful result can establish a failure even when other evidence is missing.
 
 `tests-after-edit` uses test runs recognized by `check-run@1` on shell calls and Codex `exec_command` items, as the claim check does, after recorded edits. A run's outcome follows the claim check too: a failure or suspect tier fails it (a piped `pytest | tail` fails through `tests-failed@2`), and a background launch waits for its process's exit and considers the latest recognized outcome. It does not measure line or file coverage. Custom runners and edits hidden inside shell commands may be unrecognized. `unresolved-delegations` distinguishes explicit unsuccessful outcomes from absent completion or delivery evidence. `repeated-failed-actions` reads failure episodes on an analysed index: it fails when an episode has `threshold` consecutive attempts with identical inputs and no edit between them, as the `blind-loop` alarm does. On an index the analysis pass has not run, it requires matching indexed inputs and explicit unsuccessful results, and a successful intervening action resets the streak. `token-budget` uses a session's own recorded input and output counters.
+
+## Reliability Checks
+
+Reliability Checks (`reliability`) examines a session and its descendants for explicit claims after failures and repeated observations. Open **Reliability Checks** under **Patterns and checks**, or use the shared CLI, HTTP or MCP operation:
+
+The macOS app presents this analysis natively in **Session ▸ Reliability** (⌥⌘6), **Analyze ▸ Reliability Checks**, or a session's **Check Reliability** sidebar menu. The native view starts with a review queue. Category and text filters narrow it; selecting a finding shows its explanation, measured consumption and suggested next step. Evidence buttons open the existing event-detail and raw-source inspector. **Show in Steps** and **Show in Events** follow the selected evidence, including a subagent's event. Refresh preserves a selection whose source event remains in the result.
+
+**Limits…** edits budgets, repeat thresholds and tool exemptions in a separate sheet. Invalid edits stay local until corrected; **Apply Limits** starts the new analysis. Limits remain with the window when switching modes. Budget recommendations expand separately from the finding list, and missing measurements remain unknown. The native view shares the other analyses' request cache, debounce and single-request limit, and shows a refresh notice when the run changes.
+
+After reviewing a successful repeated call, **Allow This Observation** exempts its tool, complete input digest and normalized successful output digest in the current window. Other inputs, changed outputs and failed calls remain checked. **Undo Last Allow**, **Limits… ▸ Remove**, and **Restore Defaults** reverse allowances. The shared JSON request accepts the same records in `allowedRepeatCalls` (`tool`, `inputDigest`, `outputDigest`). Configured budgets still apply to exempted observations.
+
+```sh
+agentshark analyze reliability --session 'cx:SESSION'
+agentshark analyze reliability --session 'cx:SESSION' --input reliability.json
+```
+
+```json
+{
+  "minRepeats": 3,
+  "stopAfterRepeats": 5,
+  "tokenBudget": 100000,
+  "timeBudgetUs": 600000000,
+  "allowedRepeatTools": ["mcp__monitor__sample"]
+}
+```
+
+The request uses `session` over HTTP and in MCP's `analyze_trace`. Budget limits are optional. They apply separately to each session's own counters, including when analysing a run with descendants. The operation writes nothing and invokes no model.
+
+| Rule | Evidence and Limits |
+|---|---|
+| `timeout-as-empty@1` | A failed lookup reports a timeout, then assistant text asserts that there are no results without a successful lookup in between. |
+| `failed-write-assumed-success@1` | A file write fails, then assistant text asserts a successful update to the named file without a successful write in between. |
+| `unchanged-observation@1` | At least `minRepeats` consecutive calls have complete identical inputs, normalized complete outputs, equal result status, and no observed state change. |
+
+Successful bounded shell loops that only test a literal file, sleep and read that file are explicit waits. Successful Cowork `session_info.read_transcript` calls with a positive wait limit and the running-session wait response are also waits. These protocols do not produce repeated-observation findings. Arbitrary delayed commands and failed waits remain eligible. Markdown file assertions use link destinations; a short label does not identify a different failed path with the same basename.
+
+Failure-handling findings recognize explicit English and Chinese phrases. They remain `candidate`: chronology and wording do not prove misunderstanding. A new user input, turn boundary or compaction clears pending associations. Negated, conditional, planned and quoted statements are excluded. Write assertions must name the target file; arbitrary shell writes and implicit assumptions are outside this rule's coverage.
+
+Repeated observations require sequential results, not concurrent calls. A different call, logged write by any agent, external edit, changed context or new turn breaks a chain. Missing, truncated or redacted inputs or outputs cannot establish equality. Process waits and pending-process outputs are excluded; `allowedRepeatTools` exempts intentional polling or sampling. Findings say **no observed change** because full environment state and external service state are not captured. The report retains earlier chains, while stopping recommendations use only a chain at the session's current end. Completed turns clear the active chain.
+
+Each chain reports elapsed time, tool interval union when available, recorded token consumption and evidence references. Missing measurements stay null. Up to 200 findings per category are returned; coverage discloses this cap, while totals and decisions use all examined findings. Evidence for a long chain retains its first 24 calls and its last call.
+
+`decisions` reports `stop`, `change-strategy`, `review`, `no-trigger` or `unknown`, with confidence and evidence. A recorded budget exhaustion produces `stop`; a current repeated chain produces `change-strategy`, or `stop` at `stopAfterRepeats`. These repetition decisions remain candidates. Missing budget measurements produce `unknown` unless a known partial token total already exhausts the limit. Incomplete or untrusted capture evidence prevents a current stopping recommendation. `no-trigger` describes the configured policy and never establishes task success.
+
+The budget forecast divides the remaining budget by median consumption between recent repeated calls. Token forecasts require at least two intervals with complete usage records; time forecasts require at least two intervals with logged timestamps. The result estimates how many repetitions the budget can afford at that rate. It does not predict the work needed to finish the task. `policy.advisoryOnly` is always true: a calling agent or human decides whether to stop.
 
 ## Sequence Search
 

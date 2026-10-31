@@ -1,6 +1,8 @@
 // Compile a self-contained engine without shipping checkout files or runtime dependencies.
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // TypeScript is the one development dependency; a fresh checkout has it only after npm ci.
@@ -23,7 +25,7 @@ for (const directory of ['bin', 'src']) {
     const dest = new URL(`${directory}/${rel.replace(/\.ts$/, '.js')}`, output);
     mkdirSync(new URL('.', dest), { recursive: true });
     if (!rel.endsWith('.ts')) {
-      const allowed = directory === 'src' && (rel === 'index/schema.sql' || /^workbench\/schemas\/[^/]+\.schema\.json$/.test(rel));
+      const allowed = directory === 'src' && (rel === 'index/schema.sql' || rel === 'resources/native/darwin.c' || /^workbench\/schemas\/[^/]+\.schema\.json$/.test(rel));
       if (!allowed) throw new Error(`Unexpected source asset ${directory}/${rel}; review it before extending the release allowlist.`);
       cpSync(file, dest);
       continue;
@@ -40,6 +42,14 @@ for (const directory of ['bin', 'src']) {
     const code = result.outputText.replace(/new URL\((['"])([^'"]+)\.ts\1/g, 'new URL($1$2.js$1');
     writeFileSync(dest, code);
   }
+}
+// Ship a small universal libproc helper on macOS; source remains available for other build hosts.
+if (process.platform === 'darwin') {
+  const developer = process.env.DEVELOPER_DIR ?? (existsSync('/Library/Developer/CommandLineTools') ? '/Library/Developer/CommandLineTools' : undefined);
+  const compiled = spawnSync('/usr/bin/cc', ['-O2', '-Wall', '-Wextra', '-arch', 'arm64', '-arch', 'x86_64',
+    fileURLToPath(new URL('src/resources/native/darwin.c', root)), '-o', fileURLToPath(new URL('src/resources/native/darwin-counter', output))],
+    { env: { ...process.env, ...(developer ? { DEVELOPER_DIR: developer } : {}) }, encoding: 'utf8', timeout: 15000 });
+  if (compiled.status !== 0) console.warn('Native session counters require Command Line Tools; helper will compile on first use when available.');
 }
 cpSync(new URL('web/', root), new URL('web/', output), { recursive: true });
 // The demo's synthetic sample (src/cli/demo.ts): Codex sessions, and the analysis corpus with Claude Code subagents,

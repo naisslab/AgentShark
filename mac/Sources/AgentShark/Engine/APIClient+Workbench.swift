@@ -1,10 +1,11 @@
 import Foundation
 
-/// The two workbench analyses the Mac draws natively (ANALYSIS-UX §4.1, §5.3). A protocol, so the request policy
+/// The workbench analyses the Mac draws natively. A protocol, so the request policy
 /// can be tested against a fake engine.
 protocol WorkbenchClient: Sendable {
     func perf(session: String) async throws -> PerfResult
     func diff(left: String, right: String, children: Bool, limit: Int?) async throws -> DiffResult
+    func reliability(session: String, policy: ReliabilityPolicy) async throws -> ReliabilityResult
 }
 
 /// A workbench failure code (`src/server/workbench.ts`, `src/server/query-host.ts`; ANALYSIS-UX §4.11, §5.13).
@@ -59,6 +60,28 @@ extension APIError {
 }
 
 extension APIClient: WorkbenchClient {
+    private struct ReliabilityRequest: Encodable {
+        let session: String
+        let minRepeats: Int
+        let stopAfterRepeats: Int
+        let tokenBudget: Int64?
+        let timeBudgetUs: Int64?
+        let allowedRepeatTools: [String]
+        let allowedRepeatCalls: [ReliabilityCallExemption]?
+        init(session: String, policy: ReliabilityPolicy) {
+            self.session = session
+            minRepeats = policy.minRepeats
+            stopAfterRepeats = policy.stopAfterRepeats
+            tokenBudget = policy.tokenBudget
+            timeBudgetUs = policy.timeBudgetUs
+            allowedRepeatTools = policy.allowedRepeatTools
+            allowedRepeatCalls = policy.allowedRepeatCalls
+        }
+    }
+
+    @concurrent func reliability(session: String, policy: ReliabilityPolicy) async throws -> ReliabilityResult {
+        try await workbench("reliability", body: ReliabilityRequest(session: session, policy: policy))
+    }
     private struct PerfRequest: Encodable {
         let session: String
     }

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The sections of the Statistics workspace.
 enum StatsSection: String, CaseIterable, Identifiable {
-    case summary, kinds, tools, models, performance, turns, time, endpoints, io, pairs
+    case summary, kinds, tools, models, performance, resources, turns, time, endpoints, io, pairs
 
     var id: Self { self }
 
@@ -13,6 +13,7 @@ enum StatsSection: String, CaseIterable, Identifiable {
         case .tools: return "Tools"
         case .models: return "Models"
         case .performance: return "Performance"
+        case .resources: return "Resources"
         case .turns: return "Turns"
         case .time: return "Time"
         case .endpoints: return "Endpoints"
@@ -28,6 +29,7 @@ enum StatsSection: String, CaseIterable, Identifiable {
         case .tools: return "wrench.and.screwdriver"
         case .models: return "cpu"
         case .performance: return "speedometer"
+        case .resources: return "waveform.path.ecg"
         case .turns: return "arrow.uturn.right"
         case .time: return "clock"
         case .endpoints: return "point.3.connected.trianglepath.dotted"
@@ -45,6 +47,7 @@ enum StatsSection: String, CaseIterable, Identifiable {
         case .performance:
             return "Time to first token, output tokens per second and call latency, with sample coverage.\n"
                 + "For one run's critical path, use Session ▸ Critical Path (\(AgentSharkCommands.modeShortcut(.criticalPath).keys))."
+        case .resources: return "Record and inspect the processes attached to each session. Follows session and time scope; event filters do not apply."
         case .turns: return "The turns of the sessions in scope, slowest first: wall time, impact, claim and where the time went"
         case .time: return "Wall time of the sessions in scope by bucket: waiting, tools, model, and what no bucket claims"
         case .endpoints: return "MCP servers, web hosts, hooks, shell programs and agent types: calls, sessions, failures and durations"
@@ -63,7 +66,7 @@ struct StatsWorkspace: View {
     var body: some View {
         // The workspace header (DESIGN.md §7.13): the tab strip on the left, the scope label after it.
         VStack(spacing: 0) {
-            WorkspaceHeader(model: model, label: section == .time ? "Wall time of the sessions in scope" : model.scopeLabel(for: .stats)) {
+            WorkspaceHeader(model: model, label: section == .resources ? "Session resources · session and time scope" : section == .time ? "Wall time of the sessions in scope" : model.scopeLabel(for: .stats)) {
                 ViewThatFits(in: .horizontal) {
                     Picker("Section", selection: $section) {
                         ForEach(StatsSection.allCases) { Text($0.title).tag($0) }
@@ -87,7 +90,9 @@ struct StatsWorkspace: View {
     }
 
     @ViewBuilder private var content: some View {
-        if section == .time {
+        if section == .resources {
+            StatsResourcesView(model: model)
+        } else if section == .time {
             // Time accounts for whole sessions: it does not depend on the view.
             StatsTimeView(model: model)
         } else if let view = model.view, view.count > 0 {
@@ -97,6 +102,7 @@ struct StatsWorkspace: View {
             case .tools: StatsSRTView(model: model, viewID: view.viewId)
             case .models: StatsModelsView(model: model, viewID: view.viewId)
             case .performance: StatsPerformanceView(model: model, viewID: view.viewId)
+            case .resources: EmptyView()
             case .turns: StatsTurnsView(model: model, viewID: view.viewId)
             case .time: EmptyView()
             case .endpoints: StatsEndpointsView(model: model, viewID: view.viewId)

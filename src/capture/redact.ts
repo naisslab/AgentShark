@@ -62,6 +62,42 @@ export class CaptureRedactor {
       return rec;
     }
     if (rec.rec === 'end') return { ...rec, privacy: { ...this.report } };
+    const pid = (v: number) => v === 0 ? 0 : parseInt(this.token('pid', String(v)).slice(0, 13), 16) + 1;
+    if (rec.rec === 'resource-recording') {
+      rec.id = this.id(rec.id);
+      rec.context.hostname = this.id(rec.context.hostname);
+      rec.context.cpuModel = this.text(rec.context.cpuModel, 'hardware');
+      rec.context.osRelease = this.text(rec.context.osRelease, 'os');
+      if (!/^(?:linux|darwin|win32|freebsd|openbsd|netbsd|sunos|aix|android)$/.test(rec.context.platform)) rec.context.platform = this.text(rec.context.platform);
+      if (!/^(?:arm|arm64|ia32|x64|loong64|mips|mipsel|ppc|ppc64|riscv64|s390|s390x)$/.test(rec.context.arch)) rec.context.arch = this.text(rec.context.arch);
+      if (!/^\d+\.\d+\.\d+$/.test(rec.context.toolVersion)) rec.context.toolVersion = this.text(rec.context.toolVersion, 'version');
+      if (rec.context.gpuModels) rec.context.gpuModels = rec.context.gpuModels.map((s: string) => this.text(s, 'hardware'));
+      rec.context.paths = rec.context.paths.map((p: string) => `/redacted/${this.token('path', p)}`);
+      rec.context.rootPids = rec.context.rootPids.map(pid);
+      if (rec.context.sessionBindings) rec.context.sessionBindings = rec.context.sessionBindings.map((b: any) => ({ ...b, session: this.id(b.session), roots: b.roots.map(pid), ...(b.starts ? { starts: b.starts.map((s: string) => this.id(s)) } : {}) }));
+      return rec;
+    }
+    if (rec.rec === 'resource') {
+      rec.id = this.id(rec.id);
+      rec.recording = this.id(rec.recording);
+      if (rec.sessionResources) {
+        const frame = rec.sessionResources;
+        frame.bindings = frame.bindings.map((b: any) => ({ ...b, session: this.id(b.session), roots: b.roots.map(pid), ...(b.starts ? { starts: b.starts.map((s: string) => this.id(s)) } : {}) }));
+        frame.unavailablePids = frame.unavailablePids.map(pid);
+        if (frame.unavailableProcesses) for (const p of frame.unavailableProcesses) { p.pid = pid(p.pid); p.sessions = p.sessions.map((s: string) => this.id(s)); }
+        for (const p of frame.entries) { p.pid = pid(p.pid); p.parentPid = pid(p.parentPid); p.startId = this.id(p.startId); p.sessions = p.sessions.map((s: string) => this.id(s)); }
+        for (const key of ['gpu', 'network']) if (frame[key]) for (const p of frame[key].entries) { p.pid = pid(p.pid); p.startId = this.id(p.startId); }
+      }
+      if (rec.network) for (const n of rec.network.interfaces) n.name = this.id(n.name);
+      if (rec.disk) for (const d of rec.disk.devices) d.name = this.id(d.name);
+      if (rec.filesystems) for (const f of rec.filesystems.volumes) { f.path = `/redacted/${this.token('path', f.path)}`; f.device = this.id(f.device); }
+      if (rec.processes) {
+        rec.processes.roots = rec.processes.roots.map(pid);
+        if (rec.processes.unavailablePids) rec.processes.unavailablePids = rec.processes.unavailablePids.map(pid);
+        for (const p of rec.processes.entries) { p.pid = pid(p.pid); p.parentPid = pid(p.parentPid); p.startId = this.id(p.startId); }
+      }
+      return rec;
+    }
     delete rec.native;
     delete rec.meta;
     delete rec.fields;

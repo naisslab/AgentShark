@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in 10 Hz session and host resource recording (`agentshark serve --record-resources` and native macOS controls): automatic agent process-tree discovery, CPU, RSS, disk I/O, GPU and network counters, live **Statistics ▸ Resources** charts, and `.agentcap` preservation.
+- Correct Reliability false positives for explicit shell file waits, Cowork transcript waits, and Markdown labels after a successful write to a corrected path. Native review can allow one exact successful observation, with undo and removable window-local allowances; failures and configured budgets remain checked.
+- Add native Session ▸ Reliability (⌥⌘6), Analyze and sidebar entry points, a filtered finding queue, evidence inspection, resource measurements, and a validated limits sheet. Budget recommendations expand separately from findings, and refresh retains the selected source event.
+- Add Reliability Checks to the Workbench, CLI, HTTP and MCP: evidence-backed candidates for empty-result claims after timeouts, successful-update claims after failed writes, and repeated complete observations without logged state changes. Optional session budgets provide repeat-rate forecasts and advisory stopping policies.
 - Read Google Antigravity conversations (`~/.gemini/antigravity/conversations/*.db`) as a new agent, `ag`: prompts, responses, model calls with logged latency, time to first token and tokens, tool calls with timing, exit codes and permission prompts, and subagent links.
 - Parse Copilot CLI and newer VS Code agent session-state events, including persisted usage, context, timed tools and shell exits, alongside VS Code JSONL chat logs. Link agent messages, usage and tools by call ID for accurate steps. Index version 5 reparses older sources; analysis version 15 leaves Copilot context-window capacity unknown.
 
@@ -20,4 +24,4 @@
 - Cowork diagnostics name the cause of a failed turn instead of "(success)" or "(completed)".
 - A first index works newest first in stages: live sessions appear within about a second of a cold start (about 40 seconds before, on 4 GB of real transcripts), the last day's within a few seconds, and older history fills in behind them. The status says how far back history is complete ("Indexing n/m · since 21:52"). The whole first index is about 8% faster.
 
-Local validation uses synthetic fixtures. Public signing, notarization, clean-machine installation, and empirical rule accuracy require separate release evidence.
+Automated validation uses synthetic fixtures. Local reviews of real traces do not establish general rule accuracy. Public signing, notarization, and clean-machine installation require separate release evidence.

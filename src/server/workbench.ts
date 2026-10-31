@@ -4,7 +4,7 @@ import { createWorkbench } from '../workbench/index.ts';
 
 export const WORKBENCH_OPERATIONS = [
   'context', 'compare', 'checks', 'coordination', 'verification', 'dataset', 'search', 'profile', 'cohort', 'exportTable', 'investigation', 'exportTelemetry',
-  'replayPlan', 'replayReport', 'localization', 'diff', 'perf', 'cache', 'capabilities',
+  'replayPlan', 'replayReport', 'localization', 'diff', 'perf', 'cache', 'capabilities', 'reliability',
 ] as const;
 export type WorkbenchOperation = (typeof WORKBENCH_OPERATIONS)[number];
 export type WorkbenchInput = Record<string, unknown>;
@@ -65,6 +65,7 @@ export function runWorkbench(db: DatabaseSync, operation: string, raw: unknown, 
       case 'perf': result = wb.perf({ session: session() }); break;
       case 'cache': result = wb.cache({ ...input, session: session() } as Parameters<typeof wb.cache>[0]); break;
       case 'capabilities': result = wb.capabilities({ session: session() }); break;
+      case 'reliability': result = wb.reliability({ ...input, session: session() } as Parameters<typeof wb.reliability>[0]); break;
     }
     if (own) db.exec('COMMIT');
     return result;

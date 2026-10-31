@@ -1,5 +1,6 @@
 // .agentcap writer (docs/FORMAT.md): selected sessions with their records, raw source lines and side files.
 
+import { parseResourceSample } from '../resources/codec.ts';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createWriteStream, readFileSync } from 'node:fs';
@@ -15,6 +16,8 @@ import { flagsFromBits } from '../index/writer.ts';
 import { VerifiedSource } from '../raw/evidence.ts';
 import { captureManifest, type CaptureAnalysisManifest } from './manifest.ts';
 import { CaptureRedactor, type CaptureRedactionReport } from './redact.ts';
+import { hasResources, resourceRecordings, resourceCaptureWhere } from '../resources/store.ts';
+import { selectResourceSessions } from '../resources/selection.ts';
 import type { AgentKind, BlobRec, EventRec, SessionRec, SourceKind, SourceRec, SpanRec } from '../model/types.ts';
 
 export const CAPTURE_VERSION = 1;
@@ -36,6 +39,8 @@ export interface CaptureOptions {
   filter?: string;
   raw?: boolean;
   sidecars?: boolean;
+  /** Include recorded host measurements (default true). Selection by session means temporal overlap only. */
+  resources?: boolean;
   /** Index the capture is taken from; recorded in the header. */
   indexPath?: string;
   /** Side files larger than this many bytes are left out (default 64 MiB). */
@@ -103,6 +108,7 @@ async function writeSnapshot(db: DatabaseSync, opts: CaptureOptions): Promise<Ca
   const redactor = shareable ? new CaptureRedactor(opts.redactionKey) : undefined;
   const sessions = await selectSessions(db, opts);
   const sources = selectSources(db, sessions);
+  const resources = opts.resources !== false && hasResources(db);
   const recordedClock = (db.prepare("SELECT value FROM meta WHERE key = 'capture_analysis_clock'").get() as { value: string } | undefined)?.value;
   const clock = recordedClock ? Number(recordedClock) : Date.now() * 1000;
   const manifest = captureManifest(db, clock, shareable);
@@ -125,7 +131,7 @@ async function writeSnapshot(db: DatabaseSync, opts: CaptureOptions): Promise<Ca
         // What the selection resolved to, and where it was read from.
         resolved: { sessions: sessions.length, sources: sources.size }, index: opts.indexPath ?? null,
       },
-      options: { raw, sidecars },
+      options: { raw, sidecars, ...(resources ? { resources: true } : {}) },
     });
     for (const s of sources.values()) {
       const rec = sourceRec(s);
@@ -211,6 +217,25 @@ async function writeSnapshot(db: DatabaseSync, opts: CaptureOptions): Promise<Ca
       for (const x of loose) {
         await out.write(expertRec(x));
         counts.expert++;
+      }
+    }
+
+    if (resources) {
+      const narrowed = !!(opts.sessions?.length || opts.agents?.length || opts.filter?.trim());
+      counts.resources = 0;
+      counts.recordings = 0;
+      if (!narrowed || sessions.length) {
+        const { sql, params } = resourceCaptureWhere({ from: opts.since, to: opts.until, sessions: narrowed ? sessions : undefined });
+        const restricted = narrowed || opts.since !== undefined || opts.until !== undefined;
+        const ids = restricted ? (db.prepare(`SELECT DISTINCT recording FROM resource_samples r ${sql}`).all(...params) as { recording: string }[]).map((r) => r.recording) : undefined;
+        for (const recording of resourceRecordings(db, ids)) {
+          if (narrowed && recording.context.sessionBindings) recording.context.sessionBindings = recording.context.sessionBindings.filter((b) => sessions.includes(b.session));
+          await out.write(recording); counts.recordings++;
+        }
+        for (const row of db.prepare(`SELECT sample FROM resource_samples r ${sql} ORDER BY ts, id`).iterate(...params) as Iterable<{ sample: string }>) {
+          await out.write(selectResourceSessions(parseResourceSample(row.sample), narrowed ? sessions : undefined));
+          counts.resources++;
+        }
       }
     }
 

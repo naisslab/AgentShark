@@ -1,6 +1,7 @@
 // HTTP API routes (SPEC §6, §12.5): parameter parsing and validation, mapped onto IndexQueries and DerivedQueries
 // methods. The query objects are injected, so this module never touches SQLite directly.
 
+import { packResourceSample } from '../resources/codec.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isAbsolute, normalize } from 'node:path';
 import { promisify } from 'node:util';
@@ -18,6 +19,7 @@ import {
 } from '../model/types.ts';
 import type { ApiDerivedQueries, ApiQueries } from './query-host.ts';
 import { validOperation, workbenchInput, type WorkbenchDispatch, WORKBENCH_OPERATIONS } from './workbench.ts';
+import { resourceCursor, type ResourceQuery } from '../resources/store.ts';
 
 export type { ApiDerivedQueries };
 
@@ -51,6 +53,9 @@ class HttpError extends Error {
 }
 
 export interface ApiContext {
+  resources?: (q: ResourceQuery) => unknown;
+  setResourceRecording?: (enabled: boolean, bindings?: { session: string; roots: number[] }[]) => unknown;
+  bindResourceSession?: (session: string, roots: number[]) => unknown;
   queries: ApiQueries;
   /** The SPEC §12.5 routes and `/api/info`'s `analysis`. Absent: the derived routes answer 501 not-implemented. */
   derived?: ApiDerivedQueries;
@@ -228,6 +233,46 @@ const DERIVED_ROUTES: Route[] = [
 ];
 
 const ROUTES: Route[] = [
+  route('POST', '/api/resources/recording', async (c, r) => {
+    if (!c.setResourceRecording) throw new HttpError(409, 'read-only', 'Resource recording requires a live index');
+    const body = r.body as Record<string, unknown> | undefined;
+    if (typeof body?.enabled !== 'boolean') throw new HttpError(400, 'bad-param', 'Pass enabled: true or false');
+    const bindings = body.bindings;
+    if (bindings !== undefined && (!Array.isArray(bindings) || bindings.length > 16 || bindings.some((b) =>
+      !b || Object.keys(b).some((k) => !['session', 'roots'].includes(k)) || typeof b.session !== 'string' || !b.session || !Array.isArray(b.roots) || !b.roots.length || b.roots.length > 16
+      || b.roots.some((p: unknown) => !Number.isSafeInteger(p) || Number(p) <= 0 || Number(p) > 2 ** 31 - 1))))
+      throw new HttpError(400, 'bad-param', 'Pass bindings with session IDs and positive OS PIDs');
+    if (!body.enabled && bindings !== undefined) throw new HttpError(400, 'bad-param', 'Stopping does not accept bindings');
+    return c.setResourceRecording(body.enabled, bindings as { session: string; roots: number[] }[] | undefined);
+  }),
+  route('POST', '/api/resources/bind', (c, r) => {
+    if (!c.bindResourceSession) throw new HttpError(409, 'not-recording', 'Start this server with --record-resources to attach a session process');
+    const session = bodyString(r.body, 'session');
+    const roots = (r.body as Record<string, unknown> | undefined)?.roots;
+    if (!session || !Array.isArray(roots) || roots.length > 16 || roots.some((p) => !Number.isSafeInteger(p) || p <= 0 || p > 2 ** 31 - 1))
+      throw new HttpError(400, 'bad-param', 'Pass a session ID and roots (positive OS PIDs); use an empty roots array to detach');
+    try { return c.bindResourceSession(session, roots); } catch (e) {
+      if ((e as { status?: number }).status === 409) throw e;
+      throw new HttpError(400, 'bad-param', (e as Error).message);
+    }
+  }),
+  route('GET', '/api/resources', async (c, { query: q }) => {
+    if (!c.resources) throw new HttpError(501, 'not-implemented', 'Resource measurements are not served by this server');
+    const from = time(q, 'from');
+    const to = time(q, 'to');
+    const limit = int(q, 'limit', 1);
+    if (limit !== undefined && limit > 5000) throw new HttpError(400, 'bad-param', 'limit must be at most 5000');
+    if (from !== undefined && to !== undefined && from > to) throw new HttpError(400, 'bad-param', 'from must be at or before to');
+    const after = str(q, 'after');
+    if (after) try { resourceCursor(after); } catch { throw new HttpError(400, 'bad-param', 'Invalid resource cursor'); }
+    const live = bool(q, 'live'), order = oneOf(q, 'order', ['asc', 'desc']);
+    if (live && order === 'desc') throw new HttpError(400, 'bad-param', 'Live resource deltas use ascending order');
+    const format = oneOf(q, 'format', ['compact']);
+    const result = await c.resources({ from, to, sessions: list(q, 'sessions'), after, limit, order, live, scope: oneOf(q, 'scope', ['host', 'session']) });
+    if (!format) return result;
+    const page = result as { samples: import('../resources/types.ts').ResourceSample[] };
+    return { ...page, samples: page.samples.map(packResourceSample) };
+  }),
   route('GET', '/api/info', async (c) => {
     const info = await c.queries.info();
     return c.derived ? { ...info, analysis: await c.derived.analysisStatus() } : info;

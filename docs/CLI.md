@@ -67,6 +67,7 @@ Run `agentshark fields` for every filter field. Times without a zone are local t
 
 ```text
 agentshark serve [--port 7373] [--no-open] [--no-watch]      start the viewer on the live index
+agentshark serve --record-resources [--resource-session SESSION=PID] [--resource-interval MS]  record session process resources and host context
 agentshark demo                                              open bundled synthetic traces
 agentshark open FILE.agentcap[.zst|.gz]                      view a capture
 agentshark why [--last|--session ID|--cwd DIR] [--since 8h]  why a run failed: its run report (--json, --md)
@@ -88,4 +89,8 @@ agentshark telemetry import|export [--input FILE]            offline OTLP/OpenIn
 ```
 
 `agentshark <command> --help` describes each command's options.
+
+Resource sampling is optional and starts with `serve --record-resources`. Without `--resource-session`, recording automatically discovers local writers of indexed agent transcripts on macOS and Linux. Discovery runs separately every 10–60 seconds and accepts up to 64 sessions and 16 unique roots. Shared processes are labeled and counted once across the selected sessions. Use `--resource-session SESSION=PID` for a manual binding; repeat it for several roots/sessions, with at most 16 roots total. Child discovery runs once per second and tracks at most 128 processes; known process counters target 100 ms (10 Hz). The interval accepts 100–60,000 ms. CPU 100% means one logical core. RSS sums can overlap shared pages. GPU and network counters retain their slower observation timestamps and platform availability.
+
+`--resource-pid PID` remains a legacy unbound process probe under **Host context**. `--resource-path DIR` selects up to four capacity paths. Host context, including power, temperature, pressure and free space, stays separate from session attribution. Storage uses bounded batches and live deltas. Captures retain committed session measurements and context; use `capture --no-resources` to omit them. See [session resource recording](CAPTURES.md#record-session-resources-alongside-traces) for limits, supported platforms, and overhead measurements.
 

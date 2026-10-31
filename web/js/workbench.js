@@ -40,6 +40,7 @@ const TOOLS = {
   },
   search: { text: 'Find ordered and repeated behavior, such as an unsuccessful command followed by another attempt. Search only examines the selected trace.' },
   checks: { text: 'Evaluate explicit rules against recorded evidence. A passing check describes the trace; missing evidence produces unknown.' },
+  reliability: { text: 'Find claims that conflict with failed lookups or writes, and repeated inputs and outputs without a logged state change. Review evidence and budget forecasts before acting on an advisory stopping decision.' },
   coordination: { text: 'Inspect delegation and shared file activity. Overlaps and stale reads are candidates for review, not causal findings.' },
   dataset: { text: 'Export failure examples with reviewed labels, provenance and split checks. Redaction reduces exposure; review exported text before sharing.' },
   cohort: { text: 'Compare recorded runs by condition, agent or model. A manifest identifies tasks and repeated trials; descriptive differences do not establish causal effects.' },
@@ -131,6 +132,12 @@ function choose(next, { replace = false } = {}) {
   controls.replaceChildren();
   if (SCOPED.has(next)) controls.append(choice('Analysis Scope', 'scope-mode', [['selected-session', 'Selected session'], ['listed-sessions', 'Sessions listed in the picker'], ['manifest-sessions', 'Manifest sessions']]));
   if (next === 'context') controls.append(field('Inspect Before Event (optional event ID)', 'boundary'));
+  if (next === 'reliability') controls.append(h('div', { class: 'form-grid' },
+    field('Minimum Repeated Calls', 'reliability-min', '3', 'number', { min: '2', max: '100' }),
+    field('Recommend Stopping After', 'reliability-stop', '5', 'number', { min: '2', max: '1000' }),
+    field('Per-session Token Budget (optional)', 'reliability-tokens', '', 'number', { min: '1' }),
+    field('Per-session Time Budget in Seconds (optional)', 'reliability-seconds', '', 'number', { min: '0.000001', step: 'any' }),
+    field('Tools Allowed to Repeat (comma separated)', 'reliability-allowed', '')));
   if (next === 'checks') {
     const rules = ['tests-after-edit', 'unresolved-delegations', 'repeated-failed-actions', 'token-budget'];
     controls.append(
@@ -187,6 +194,13 @@ function formInput() {
   if (operation === 'context' && $('boundary').value.trim()) input.atEventId = $('boundary').value.trim();
   if (operation === 'localization') input.scope = $('loc-scope').value;
   if (operation === 'cache') input.idleMinutes = Number($('idle-minutes').value);
+  if (operation === 'reliability') {
+    input.minRepeats = Number($('reliability-min').value);
+    input.stopAfterRepeats = Number($('reliability-stop').value);
+    if ($('reliability-tokens').value.trim()) input.tokenBudget = Number($('reliability-tokens').value);
+    if ($('reliability-seconds').value.trim()) input.timeBudgetUs = Math.round(Number($('reliability-seconds').value) * 1_000_000);
+    input.allowedRepeatTools = $('reliability-allowed').value.split(',').map(s => s.trim()).filter(Boolean);
+  }
   if (TWO_RUNS.has(operation)) {
     const right = $('right').value;
     if (!right) throw new Error('Choose run B to compare with.');
@@ -441,6 +455,7 @@ function completeJson(result) {
 const ENVELOPE = new Set(['schemaVersion', 'analysisVersion', 'coverage', 'summary', 'caveats', 'method', 'comparisonRule', 'rules']);
 const isIdentityMap = (key, value) => key === 'sessions' && value && typeof value === 'object' && !Array.isArray(value);
 const OWN = {
+  reliability: new Set(['sessionId', 'policy', 'failureHandling', 'noProgress', 'decisions']),
   perf: new Set(['sessionId', 'criticalPath', 'rework', 'collaboration', 'missing']),
   diff: new Set(['left', 'right', 'delta', 'firstDivergence', 'regions', 'alignment']),
 };
@@ -449,6 +464,7 @@ function render(result, input) {
   const notes = gapNotes(result);
   const ctx = { known, notes: new Map(notes.map((n) => [n.code, n.text])), shareOf: null };
   const own = operation === 'perf' && result.criticalPath ? perfView(result, notes, ctx)
+    : operation === 'reliability' && Array.isArray(result.decisions) ? reliabilityView(result, notes, ctx)
     : operation === 'diff' && Array.isArray(result.alignment) ? diffView(result, notes, input) : null;
   const out = own ?? [evidenceLine(result, notes), summaryTiles(result.summary, ctx), resultActions(result)];
   for (const [key, value] of Object.entries(result)) {
@@ -459,6 +475,20 @@ function render(result, input) {
   if (own) out.push(resultActions(result));
   out.push(completeJson(result));
   $('results').replaceChildren(...out.filter(Boolean));
+}
+
+function reliabilityView(result, notes, ctx) {
+  return [evidenceLine(result, notes), summaryTiles(result.summary, ctx),
+    section('Budget and Stopping Recommendations', h('div', null, result.decisions.map(d => h('div', { class: 'card' },
+      h('h3', null, sessionTitle(d.sessionId, known)),
+      h('p', { class: d.decision === 'stop' ? 'warn-line' : null }, `${fieldLabel(d.decision)}: ${d.reason}`),
+      factsNode({ confidence: d.confidence, ...d.budget, scope: 'This session only', evidence: d.evidence }, ctx, 0))))),
+    section('Failure Handling Candidates', valueNode('failureHandling', result.failureHandling, ctx)),
+    section('Repeated Observations', valueNode('noProgress', result.noProgress.map(r => ({
+      rule: r.rule, sessionId: r.sessionId, tool: r.tool, attempts: r.attempts, state: r.active ? 'Latest calls' : 'Earlier in the trace',
+      wallUs: r.measurement.wallUs, tokens: r.measurement.tokens, confidence: r.confidence, evidence: r.evidence,
+    })), ctx)),
+    section('Policy', factsNode(result.policy, ctx, 0))];
 }
 
 // ---------------------------------------------------------------------------

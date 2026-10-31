@@ -24,6 +24,7 @@ struct SessionWorkspace: View {
         case .flow: FlowWorkspace(model: model)
         case .criticalPath: CriticalPathWorkspace(model: model)
         case .compare: CompareWorkspace(model: model)
+        case .reliability: ReliabilityWorkspace(model: model)
         }
     }
 }

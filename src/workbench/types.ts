@@ -1,6 +1,6 @@
 /** Portable workbench contracts. All times and durations use integer microseconds. */
 export const WORKBENCH_SCHEMA = 'agentshark.workbench.v1' as const;
-export const WORKBENCH_VERSION = '1.1.0' as const;
+export const WORKBENCH_VERSION = '1.2.0' as const;
 export type Confidence = 'observed' | 'derived' | 'candidate' | 'unknown';
 export interface EvidenceRef {
     eventId: string;

@@ -9,7 +9,7 @@ enum AppShortcut: String, CaseIterable {
     case copyAsJSON, find, findNext, findPrevious, mark
     // View
     case workspace1, workspace2, workspace3, workspace4, workspace5, workspace6, workspace7
-    case sessionSteps, sessionTranscript, sessionFlow, sessionCriticalPath, sessionCompare, showTimelineTrack, showInspector
+    case sessionSteps, sessionTranscript, sessionFlow, sessionCriticalPath, sessionCompare, sessionReliability, showTimelineTrack, showInspector
     // Go
     case back, forward, goToEvent, partnerEvent, previousInTurn, nextInTurn, nextMark, parentSession, childSession, nextRegion,
          previousRegion, timeReference
@@ -40,6 +40,7 @@ enum AppShortcut: String, CaseIterable {
         case .sessionFlow: return KeyboardShortcut("3", modifiers: [.command, .option])
         case .sessionCriticalPath: return KeyboardShortcut("4", modifiers: [.command, .option])
         case .sessionCompare: return KeyboardShortcut("5", modifiers: [.command, .option])
+        case .sessionReliability: return KeyboardShortcut("6", modifiers: [.command, .option])
         case .showTimelineTrack: return KeyboardShortcut("t", modifiers: [.command, .option])
         case .showInspector: return KeyboardShortcut("i", modifiers: [.command, .option])
         case .back: return KeyboardShortcut("[")

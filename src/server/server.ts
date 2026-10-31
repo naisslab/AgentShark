@@ -15,6 +15,13 @@ import type { IndexProgress, IndexRunResult } from '../index/indexer.ts';
 import { DEFAULT_QUERY_TIMEOUT_MS, DEFAULT_QUERY_WORKERS, QueryHost, type ApiDerivedQueries, type ApiQueries } from './query-host.ts';
 import { handleApi, sendJson } from './routes.ts';
 import { runWorkbench, type WorkbenchDispatch } from './workbench.ts';
+import { startResourceRecorder, type ResourceRecorder } from '../resources/recorder.ts';
+import { liveResources } from '../resources/live.ts';
+import { queryResources, type ResourceQuery } from '../resources/store.ts';
+import type { GpuMode } from '../resources/sampler.ts';
+import type { SessionBinding } from '../resources/types.ts';
+import { createResourceDiscovery } from '../resources/discovery.ts';
+import { validateBindings } from '../resources/sessions.ts';
 
 export const DEFAULT_WEB_ROOT = resolve(import.meta.dirname, '../../web');
 
@@ -306,6 +313,9 @@ export function idleStatus(): IndexingStatus {
 // HTTP layer
 
 export interface HttpOptions {
+  resources?: (q: ResourceQuery) => unknown;
+  setResourceRecording?: (enabled: boolean, bindings?: SessionBinding[]) => unknown;
+  bindResourceSession?: (session: string, roots: number[]) => unknown;
   port: number;
   queries: ApiQueries;
   /** The derived routes (SPEC §12.5). Absent: they answer 501 not-implemented. */
@@ -338,6 +348,9 @@ export async function startHttpServer(opts: HttpOptions): Promise<HttpServer> {
     queries: opts.queries,
     derived: opts.derived,
     workbench: opts.workbench,
+    resources: opts.resources,
+    setResourceRecording: opts.mode === 'live' ? opts.setResourceRecording : undefined,
+    bindResourceSession: opts.bindResourceSession,
     reindex: opts.mode === 'live' ? opts.reindex : undefined,
     setAlarmThresholds: opts.mode === 'live' ? opts.setAlarmThresholds : undefined,
     openStream: (res: ServerResponse) => hub.add(res),
@@ -517,6 +530,12 @@ function contentSecurityPolicy(html: string): string {
 // Entry point used by the CLI (docs/MODULES.md)
 
 export interface StartServerOptions {
+  recordResources?: boolean;
+  resourceIntervalMs?: number;
+  resourceSessions?: SessionBinding[];
+  resourceGpu?: GpuMode;
+  resourcePids?: number[];
+  resourcePaths?: string[];
   port: number;
   host?: '127.0.0.1';
   open?: boolean;
@@ -558,6 +577,13 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
   let localDerived!: DerivedQueries;
   let workbench!: WorkbenchDispatch;
   let captureNow: number | undefined;
+  let recorder: ResourceRecorder | undefined;
+  let recordingChange: Promise<unknown> | undefined;
+  let closing = false;
+  const resourceError = (status: number, code: string, message: string) => Object.assign(new Error(message), { status, code });
+  const startRecording = (sessions = opts.resourceSessions) => startResourceRecorder(opts.indexPath, opts.resourceIntervalMs, undefined,
+    { gpuMode: opts.resourceGpu, pids: opts.resourcePids, paths: opts.resourcePaths, sessions,
+      ...(sessions === undefined ? { discovery: createResourceDiscovery(() => live!.reader) } : {}) });
   const connect = (db: DatabaseSync) => {
     local = createQueries(db, {
       mode: opts.mode, indexPath: opts.indexPath, capturePath: opts.capturePath,
@@ -591,6 +617,10 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
   }) : null;
   try {
     connect(live ? live.reader : opts.db!);
+    if (opts.recordResources) {
+      if (!live) throw new Error('Resource recording requires live mode');
+      recorder = await startRecording();
+    }
     const workers = opts.indexPath === ':memory:' ? 0 : (opts.queryWorkers ?? envInt('AGENTSHARK_QUERY_WORKERS') ?? DEFAULT_QUERY_WORKERS);
     if (workers > 0) {
       host = new QueryHost({
@@ -618,6 +648,42 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
     const http = await startHttpServer({
       port: opts.port, queries: api, derived: host ? host.derivedApi() : current<ApiDerivedQueries>(() => localDerived), mode: opts.mode,
       workbench: (operation, input) => host ? host.workbench(operation, input) : workbench(operation, input),
+      setResourceRecording: live ? async (enabled, bindings) => {
+        if (closing || recordingChange) throw resourceError(409, 'recording-busy', 'A recording change is in progress. Try again.');
+        try { validateBindings(bindings ?? []); }
+        catch (e) { throw resourceError(400, 'bad-param', (e as Error).message); }
+        if (bindings?.some((b) => b.roots.includes(process.pid))) throw resourceError(400, 'bad-param', 'Choose an agent PID, not the AgentShark recorder PID');
+        if (enabled && recorder && bindings !== undefined) throw resourceError(409, 'already-recording', 'Recording is already running. Attach the session with the binding control.');
+        const change = (async () => {
+          if (enabled && !recorder) {
+            try { recorder = await startRecording(bindings); }
+            catch (e) { if (isBusy(e)) throw resourceError(409, 'recording-busy', 'Another AgentShark process is recording this index. Stop that recording first.'); throw e; }
+          } else if (!enabled && recorder) {
+            // Keep the live tail readable until pending samples have been flushed.
+            await recorder.close(); recorder = undefined;
+          }
+          return { recording: recorder?.status() ?? { enabled: false } };
+        })();
+        recordingChange = change;
+        try { return await change; } finally { recordingChange = undefined; }
+      } : undefined,
+      bindResourceSession: live ? (session, roots) => {
+        if (closing || recordingChange) throw resourceError(409, 'recording-busy', 'A recording change is in progress. Try again.');
+        if (!recorder) throw resourceError(409, 'not-recording', 'Start resource recording before attaching a session');
+        recorder.bind(session, roots); return { recording: recorder.status() };
+      } : undefined,
+      resources: async (q) => {
+        if (q.live && recorder && live) return { ...liveResources(live.reader, recorder, q), canRecord: true, recording: recorder.status() };
+        // Polling an idle recorder needs no history query. Clients load history explicitly once.
+        if (q.live && live) return { scope: q.scope ?? 'host', samples: [], recordings: [], cursor: q.after ?? null, canRecord: true, recording: { enabled: false } };
+        const data = host ? await host.resources(q) : queryResources(live ? live.reader : opts.db!, q);
+        // Start a live cursor at the history boundary or the tail's lower bound. An old scoped
+        // history page must not repeatedly reset just because its session ended before this recording.
+        const oldest = recorder?.snapshot().samples[0];
+        const last = q.order === 'desc' ? data.samples[0] : data.samples.at(-1);
+        const cursor = oldest ? Buffer.from(JSON.stringify(last && last.ts >= oldest.ts ? [last.ts, last.id] : [oldest.ts - 1, ''])).toString('base64url') : null;
+        return { ...data, cursor, canRecord: !!live, recording: recorder?.status() ?? { enabled: false } };
+      },
       reindex: live ? () => live.reindex() : undefined,
       setAlarmThresholds: live ? async (t) => {
         try {
@@ -642,12 +708,16 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
       token: http.token,
       ...(live && { writer: live.writer }),
       close: async () => {
+        closing = true;
+        await recordingChange?.catch(() => {});
+        await recorder?.close();
         await http.close();
         await host?.close();
         await live?.close();
       },
     };
   } catch (err) {
+    await recorder?.close();
     await host?.close();
     await live?.close();
     throw err;

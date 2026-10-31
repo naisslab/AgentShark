@@ -8,7 +8,10 @@ import { loadCapture, type CaptureLoadOptions } from '../capture/reader.ts';
 import { engineDigest } from '../capture/manifest.ts';
 import { defaultHome, defaultIndexPath, IndexOpenError, openIndex } from '../index/db.ts';
 import { startServer, type StartedServer, type StartServerOptions } from '../server/server.ts';
-import { type Args, CliError, err, fmtBytes, fmtNum, fmtTime, out, parseInt10, progress, string, tildify, version } from './util.ts';
+import { DEFAULT_RESOURCE_INTERVAL_MS, validateResourceInterval } from '../resources/recorder.ts';
+import type { GpuMode } from '../resources/sampler.ts';
+import { validateBindings } from '../resources/sessions.ts';
+import { type Args, CliError, err, fmtBytes, fmtNum, fmtTime, out, parseInt10, progress, string, strings, tildify, version } from './util.ts';
 
 const DEFAULT_PORT = 7373;
 /** `open` without --port tries this many ports from the default before giving up. */
@@ -45,6 +48,27 @@ export async function serve(a: Args): Promise<number> {
   const indexPath = resolve(string(a.values.index) ?? defaultIndexPath());
   const port = parseInt10(string(a.values.port), '--port') ?? DEFAULT_PORT;
   const watch = a.values['no-watch'] !== true;
+  const recordResources = a.values['record-resources'] === true;
+  const bySession = new Map<string, number[]>();
+  for (const value of strings(a.values['resource-session']) ?? []) {
+    const match = /^(.+)=(\d+)$/.exec(value);
+    if (!match) throw new CliError('--resource-session expects SESSION=PID', 2);
+    bySession.set(match[1], [...new Set([...(bySession.get(match[1]) ?? []), Number(match[2])])]);
+  }
+  const resourceSessions = [...bySession].map(([session, roots]) => ({ session, roots }));
+  try { validateBindings(resourceSessions); } catch (e) { throw new CliError(`--resource-session: ${(e as Error).message}`, 2); }
+  if (resourceSessions.length && !recordResources) throw new CliError('--resource-session requires --record-resources', 2);
+  const resourcePids = [...new Set((strings(a.values['resource-pid']) ?? []).map((p) => parseInt10(p, '--resource-pid')!))];
+  if (resourcePids.length > 16 || resourcePids.some((p) => p < 1 || p > 2 ** 31 - 1)) throw new CliError('--resource-pid needs at most 16 positive PIDs', 2);
+  const resourcePaths = [...new Set((strings(a.values['resource-path']) ?? []).map((p) => resolve(p)))];
+  if (resourcePaths.length > 4) throw new CliError('--resource-path accepts at most 4 paths', 2);
+  if (!recordResources && (resourcePids.length || resourcePaths.length)) throw new CliError('--resource-pid and --resource-path require --record-resources', 2);
+  const resourceGpu = string(a.values['resource-gpu']) ?? 'auto';
+  if (!['auto', 'off', 'always'].includes(resourceGpu)) throw new CliError('--resource-gpu expects auto, off or always', 2);
+  if (a.values['resource-gpu'] !== undefined && !recordResources) throw new CliError('--resource-gpu requires --record-resources', 2);
+  const resourceIntervalMs = parseInt10(string(a.values['resource-interval']), '--resource-interval') ?? DEFAULT_RESOURCE_INTERVAL_MS;
+  if (a.values['resource-interval'] !== undefined && !recordResources) throw new CliError('--resource-interval requires --record-resources', 2);
+  try { validateResourceInterval(resourceIntervalMs); } catch (e) { throw new CliError((e as Error).message, 2); }
   let first = true;
   const bar = progress('indexing');
   let server: StartedServer;
@@ -54,6 +78,12 @@ export async function serve(a: Args): Promise<number> {
         port,
         open: a.values['no-open'] !== true,
         watch,
+        recordResources,
+        resourceSessions: resourceSessions.length ? resourceSessions : undefined,
+        resourceIntervalMs,
+        resourceGpu: resourceGpu as GpuMode,
+        resourcePids,
+        resourcePaths: resourcePaths.length ? resourcePaths : undefined,
         mode: 'live',
         indexPath,
         onIndex: (event, data) => {
@@ -77,6 +107,7 @@ export async function serve(a: Args): Promise<number> {
   announce(a, server, 'live', indexPath, [
     `${out.bold('AgentShark')}  live index ${tildify(indexPath)}`,
     `  viewer  ${out.cyan(server.url)}`,
+    ...(recordResources ? [`  resources  session process trees every ${resourceIntervalMs} ms; automatic discovery in Statistics > Resources (${resourceSessions.length} manual bindings); host context stays separate`] : []),
     out.dim(`  ${policy}. Press Ctrl+C to stop.`),
   ]);
   return untilSignal(server);

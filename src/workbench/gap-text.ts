@@ -52,6 +52,9 @@ function percent(share: number): string {
 }
 
 export const GAP_TEXT: Readonly<Record<string, Text>> = {
+    'reliability-semantic-rules-limited': 'Failure-handling checks recognize explicit English and Chinese assertions. Other wording and implicit assumptions may be missed.',
+    'environment-state-not-captured': 'Only logged changes are compared. Complete environment state and external service state were not captured.',
+    'reliability-finding-limit': 'Only the first 200 findings of each reliability category are returned. Totals and policy decisions use all examined findings.',
     // Every analysis: the loaded events and the index (Data.load).
     'analysis-failed': 'The analysis pass failed on some run trees, so their derived rows may be missing.',
     'analysis-outdated': 'The derived tables come from another analysis version or were never written (run agentshark index --rederive).',

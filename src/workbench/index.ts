@@ -9,6 +9,7 @@ import { diff, type DiffSpec } from './diff.ts';
 import { perf, type PerfSpec } from './perf.ts';
 import { cache, type CacheSpec } from './cache.ts';
 import { capabilities, type CapabilitiesSpec } from './capabilities.ts';
+import { reliability, type ReliabilitySpec } from './reliability.ts';
 import { Research, validateManifest, validateAnnotation } from './research.ts';
 import type { ChecksSpec, CohortSpec, CompareSpec, ContextOptions, DatasetSpec, ExportSpec, InvestigationSpec, SearchSpec, WorkbenchOptions } from './types.ts';
 export * from './types.ts';
@@ -16,7 +17,7 @@ export { WorkbenchInputError } from './data.ts';
 export { validateManifest, validateAnnotation };
 export { importTelemetryDocument } from './interop.ts';
 export type { TelemetryExportSpec, TelemetryImportOptions, TelemetrySpan } from './interop.ts';
-export type { LocalizationSpec, DiffSpec, PerfSpec, CacheSpec, CapabilitiesSpec };
+export type { LocalizationSpec, DiffSpec, PerfSpec, CacheSpec, CapabilitiesSpec, ReliabilitySpec };
 export function createWorkbench(db: DatabaseSync, options: WorkbenchOptions = {}) {
     const data = new Data(db, options), analysis = new Analysis(data), research = new Research(data);
     return {
@@ -33,6 +34,7 @@ export function createWorkbench(db: DatabaseSync, options: WorkbenchOptions = {}
         perf: (spec: PerfSpec) => data.snapshot(() => perf(data, spec)),
         cache: (spec: CacheSpec) => data.snapshot(() => cache(data, spec)),
         capabilities: (spec: CapabilitiesSpec) => data.snapshot(() => capabilities(data, spec)),
+        reliability: (spec: ReliabilitySpec) => data.snapshot(() => reliability(data, spec)),
         dataset: (spec?: DatasetSpec) => data.snapshot(() => research.dataset(spec)),
         cohort: (spec?: CohortSpec) => data.snapshot(() => research.cohort(spec)),
         exportTable: (spec: ExportSpec) => data.snapshot(() => research.exportTable(spec)),

@@ -8,6 +8,7 @@ import { openIndex, READABLE_OLD_SCHEMAS } from '../index/db.ts';
 import { createDerivedQueries } from '../index/derived-queries.ts';
 import { createQueries } from '../index/queries.ts';
 import { runWorkbench } from './workbench.ts';
+import { queryResources, type ResourceQuery } from '../resources/store.ts';
 
 export interface QueryWorkerData {
   agentsharkQueryWorker: true;
@@ -24,6 +25,7 @@ export type QueryWorkerRequest =
   | { type: 'call'; id: number; method: keyof IndexQueries; args: unknown[] }
   | { type: 'derived'; id: number; method: keyof DerivedQueries; args: unknown[] }
   | { type: 'workbench'; id: number; method: string; args: unknown[] }
+  | { type: 'resources'; id: number; method: string; args: unknown[] }
   | { type: 'changes'; sessions: string[] | null };
 
 export type QueryWorkerReply =
@@ -69,6 +71,10 @@ if (!isMainThread && parentPort && (workerData as QueryWorkerData | undefined)?.
       return;
     }
     try {
+      if (m.type === 'resources') {
+        port.postMessage({ type: 'result', id: m.id, value: queryResources(db, m.args[0] as ResourceQuery) } satisfies QueryWorkerReply);
+        return;
+      }
       if (m.type === 'workbench') {
         const value = await runWorkbench(db, m.method, m.args[0], { mode: data.mode, indexPath: data.indexPath, now: data.now });
         port.postMessage({ type: 'result', id: m.id, value } satisfies QueryWorkerReply);

@@ -507,9 +507,12 @@ export function behaviorRows(left, right) {
 const TIME_KEYS = new Set(['start', 'end', 'from', 'to', 'snapshotAt', 'ts']);
 const RULE_KEYS = new Set(['method', 'comparisonRule', 'bindingSrc', 'rules']);
 const SESSION_KEYS = new Set(['session', 'sessionId', 'sessions', 'sessionIds', 'parent', 'child', 'left', 'right']);
-const TOKEN_KEYS = new Set(['input', 'cacheRead', 'uncached', 'missed', 'tokensIn', 'tokensOut']);
+const TOKEN_KEYS = new Set(['input', 'cacheRead', 'uncached', 'missed', 'tokensIn', 'tokensOut', 'tokens', 'tokenBudget', 'usedTokens', 'knownTokens', 'remainingTokens', 'medianTokensPerRepeat']);
 const SESSION_ID = /^[a-z]{2,3}:\S+$/;
 const LABELS = {
+  timeBudgetUs: 'Time budget', usedUs: 'Elapsed time', remainingUs: 'Remaining time', minRepeats: 'Minimum repeated calls',
+  stopAfterRepeats: 'Stop after repeated calls', repeatsWithinTokenBudget: 'Repeats affordable with remaining tokens',
+  repeatsWithinTimeBudget: 'Repeats affordable with remaining time', knownTokens: 'Known token consumption',
   us: 'Time', wallUs: 'Wall time', pathUs: 'Path time', onPathUs: 'On path', busyUs: 'Busy', parentWaitUs: 'Parent waited',
   siblingOverlapUs: 'Overlap with siblings', workUs: 'Agent work', spanUs: 'Span', coordinationUs: 'Waiting on other agents', durMs: 'Duration',
   startTs: 'Start', endTs: 'End', snapshotAt: 'Snapshot', ts: 'Time', sessionId: 'Session', sessionIds: 'Sessions', eventId: 'Event',

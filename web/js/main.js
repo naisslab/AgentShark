@@ -2395,9 +2395,9 @@ function createStatusBar() {
 
 // ---------------------------------------------------------------------------
 // First-run, empty-index and connection overlay. It covers only the workspaces that show events,
-// so Sources and Diagnostics stay reachable when the index is empty (SPEC §7.8).
+// Statistics can show host resources before any trace arrives; its other tabs have their own empty states.
 
-const OVERLAY_FREE = new Set(['sources', 'expert']);
+const OVERLAY_FREE = new Set(['sources', 'expert', 'stats']);
 
 function createOverlay() {
   const el = h('div', { class: 'overlay', hidden: true });

@@ -12,6 +12,8 @@ import type { BlobRec, IndexRecord, SourceRec } from '../model/types.ts';
 import { CAPTURE_VERSION } from './writer.ts';
 import { validateRecordedManifest, type CaptureAnalysisManifest } from './manifest.ts';
 import { ALARM_THRESHOLDS } from '../model/types.ts';
+import { ensureResourceTable, putResourceRecording, putResourceSample, validResourceRecording, validResourceSample } from '../resources/store.ts';
+import type { ResourceRecording, ResourceSample } from '../resources/types.ts';
 
 export interface CaptureLoadOptions {
   /** Recorded settings are the default for manifested captures; incompatible builds require explicit current. */
@@ -60,6 +62,7 @@ export async function loadCapture(
 async function loadCaptureRecords(capturePath: string, db: DatabaseSync, onProgress: ((bytes: number) => void) | undefined, opts: CaptureLoadOptions): Promise<CaptureLoadResult> {
   const codec = await detectCompression(capturePath);
   const writer = new IndexWriter(db);
+  ensureResourceTable(db);
   const hash = createHash('sha256');
   let hashedRecords = 0;
   const integrity: CaptureIntegrity = { status: 'unverified', streamChecksum: 'missing', checkedBlobs: 0, checkedRawLines: 0, errors: [] };
@@ -124,7 +127,7 @@ async function loadCaptureRecords(capturePath: string, db: DatabaseSync, onProgr
       // A capture index holds exactly one capture.
       writer.transaction(() => {
         db.exec(`DELETE FROM sources; DELETE FROM sessions; DELETE FROM events; DELETE FROM event_payload; DELETE FROM spans; DELETE FROM expert;
-                 DELETE FROM enrich; DELETE FROM raw_store; DELETE FROM blobs;
+                 DELETE FROM enrich; DELETE FROM raw_store; DELETE FROM blobs; DELETE FROM resource_samples; DELETE FROM resource_recordings;
                  INSERT INTO events_fts (events_fts) VALUES ('delete-all');`);
         db.exec("DELETE FROM meta WHERE key LIKE 'capture_%' OR key IN ('analysis_version', 'sig_version', 'analysis_failed', 'analysis_pending', 'alarm_thresholds')");
         const put = db.prepare('INSERT OR REPLACE INTO meta VALUES (?, ?)');
@@ -134,10 +137,16 @@ async function loadCaptureRecords(capturePath: string, db: DatabaseSync, onProgr
       return;
     }
     if (!valid(rec)) { issue(`Invalid ${String(rec.rec)} record`); return bump('invalid'); }
-    if (['source', 'session', 'event', 'span'].includes(rec.rec) && seen.run(rec.rec, rec.id).changes === 0) {
+    if (['source', 'session', 'event', 'span', 'resource', 'resource-recording'].includes(rec.rec) && seen.run(rec.rec, rec.id).changes === 0) {
       issue(`Duplicate ${rec.rec} identifier`); return bump('invalid');
     }
     switch (rec.rec) {
+      case 'resource-recording':
+        putResourceRecording(db, rec as ResourceRecording);
+        break;
+      case 'resource':
+        putResourceSample(db, rec as ResourceSample);
+        break;
       case 'source':
         flush();
         writer.putSource(rec as SourceRec, { parseMs: 0 });
@@ -261,7 +270,7 @@ async function loadCaptureRecords(capturePath: string, db: DatabaseSync, onProgr
     integrity.streamChecksum = expected.algorithm === 'sha256' && expected.digest === hash.digest('hex') && expected.records === hashedRecords ? 'verified' : 'failed';
     if (integrity.streamChecksum === 'failed') issue('Capture stream hash or record count mismatch');
   }
-  const plural: Record<string, string> = { sources: 'source', sessions: 'session', events: 'event', spans: 'span', expert: 'expert', enrich: 'enrich', blobs: 'blob' };
+  const plural: Record<string, string> = { sources: 'source', sessions: 'session', events: 'event', spans: 'span', expert: 'expert', enrich: 'enrich', blobs: 'blob', resources: 'resource', recordings: 'resource-recording' };
   if (complete) for (const [key, kind] of Object.entries(plural)) {
     if (typeof trailer?.counts?.[key] === 'number' && trailer.counts[key] !== (counts[kind] ?? 0)) issue(`Capture ${key} count mismatch`);
   }
@@ -327,6 +336,8 @@ function sourceOfEvent(id: unknown): string | undefined {
 function valid(r: Record<string, any>): boolean {
   const str = (v: unknown) => typeof v === 'string' && v.length > 0;
   switch (r.rec) {
+    case 'resource-recording': return validResourceRecording(r);
+    case 'resource': return validResourceSample(r);
     case 'source': return str(r.id) && str(r.path) && str(r.agent) && str(r.kind);
     case 'session': return str(r.id) && str(r.agent) && str(r.nativeId) && str(r.role);
     case 'event': return str(r.id) && str(r.session) && Number.isSafeInteger(r.ts) && str(r.kind) && str(r.proto) && str(r.actor) && str(r.tsSrc) && Number.isSafeInteger(r.seq);

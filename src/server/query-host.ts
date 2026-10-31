@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import type { DerivedQueries, IndexQueries } from '../index/api.ts';
 import type { QueryWorkerData, QueryWorkerReply, QueryWorkerRequest, SerializedError } from './query-worker.ts';
+import type { queryResources, ResourceQuery } from '../resources/store.ts';
 
 /** IndexQueries whose methods may also answer with a promise (the routes await every result). */
 export type ApiQueries = {
@@ -29,7 +30,7 @@ export const DEFAULT_QUERY_TIMEOUT_MS = 30_000;
 
 interface Job {
   id: number;
-  type: 'call' | 'derived' | 'workbench';
+  type: 'call' | 'derived' | 'workbench' | 'resources';
   method: string;
   args: unknown[];
   resolve: (v: unknown) => void;
@@ -112,6 +113,12 @@ export class QueryHost {
   /** `info()` answered by a worker: it counts rows, which the HTTP thread must not do on a large index. */
   workerInfo(): Promise<ReturnType<IndexQueries['info']>> {
     return this.enqueue('call', 'info', [], undefined) as Promise<ReturnType<IndexQueries['info']>>;
+  }
+
+  /** Resource reads reuse the existing pool, so large recordings do not block the viewer. */
+  resources(q: ResourceQuery): Promise<ReturnType<typeof queryResources>> {
+    if (this.closed) return Promise.reject(httpError(503, 'shutting-down', 'The server is stopping'));
+    return this.enqueue('resources', 'resources', [q], undefined) as Promise<ReturnType<typeof queryResources>>;
   }
 
   /** Bounded analyses share the worker pool's deadline and cancellation behavior. */

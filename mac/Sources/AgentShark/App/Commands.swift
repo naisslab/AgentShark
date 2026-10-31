@@ -300,7 +300,7 @@ struct AgentSharkCommands: Commands {
     /// downloads and file inputs. The modes' keys (⌥⌘4, ⌥⌘5) live on View ▸ Session Mode, since a key binds one item.
     @CommandsBuilder private var analyzeMenu: some Commands {
         CommandMenu("Analyze") {
-            ForEach([SessionMode.criticalPath, .compare], id: \.self) { mode in
+            ForEach([SessionMode.reliability, .criticalPath, .compare], id: \.self) { mode in
                 Button(mode.commandTitle) { model?.showSessionMode(mode) }
                     .disabled(model == nil)
             }
@@ -334,6 +334,7 @@ struct AgentSharkCommands: Commands {
         case .flow: return .sessionFlow
         case .criticalPath: return .sessionCriticalPath
         case .compare: return .sessionCompare
+        case .reliability: return .sessionReliability
         }
     }
 

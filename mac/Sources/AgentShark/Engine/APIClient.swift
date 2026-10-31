@@ -260,7 +260,7 @@ final class APIClient: Sendable {
         try Self.decode(T.self, from: try await send(request("GET", path, query: query)))
     }
 
-    private func post<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
+    func post<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
         var req = request("POST", path)
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(body)

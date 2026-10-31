@@ -111,7 +111,9 @@ extension WindowModel {
     /// ⌘↩ (the Failures menu): what the mode shows in Session. Critical Path shows the selected mark's evidence and
     /// Compare the chosen run's action, each in the session its result names; elsewhere it is the subject event.
     func showSelectionInSession() {
-        if workspace == .session && sessionMode == .criticalPath {
+        if workspace == .session && sessionMode == .reliability {
+            reliabilityModel.showInSteps(self)
+        } else if workspace == .session && sessionMode == .criticalPath {
             CriticalPathModel.of(self).showInSession(criticalPathTarget)
         } else if isComparing {
             guard compareShowsAlignment else { return NSSound.beep() }
@@ -124,6 +126,7 @@ extension WindowModel {
     /// ⌘↩ has something to show: a mark or row with evidence in Critical Path, an action on the chosen run of the
     /// alignment Compare shows, a subject event elsewhere.
     var canShowSelectionInSession: Bool {
+        if workspace == .session && sessionMode == .reliability { return reliabilityModel.selectedEvidence != nil }
         if workspace == .session && sessionMode == .criticalPath { return criticalPathTarget?.evidence != nil }
         if isComparing { return compareShowsAlignment && CompareModel.of(self).selectedAction != nil }
         return subjectEventID != nil
