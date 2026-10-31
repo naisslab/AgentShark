@@ -30,30 +30,30 @@
 </picture>
 <p align="center"><sub>The macOS app on real Claude Code and Codex sessions from AgentShark's own development, with the home folder pseudonymized.</sub></p>
 
-Coding agents already write a detailed record of every prompt, model step, tool call and error to your disk. Those records are hard to read: one session can span thousands of JSON lines across several subagents, and each agent writes its own format. AgentShark reads the files where they are, indexes them into one local SQLite database, and takes you from "this run failed" to the exact source line that shows why.
-
-The interface follows Wireshark: an overview of sessions, a filterable event list, a decoded detail tree and the raw record behind it. The resemblance ends there, and AgentShark does not read or write pcap files.
-
-Everything runs locally. AgentShark needs no account, API key or agent plugin, it never modifies the logs it reads, and it sends no data off your machine.
+Coding agents write detailed logs of every prompt, model step, tool call, and error to disk—often thousands of lines across subagents in incompatible formats. AgentShark indexes those local files into SQLite and takes you from a failed run to the exact source record that shows why, using a Wireshark-style event list, decoded detail tree, and raw record view. Everything runs locally with no account, API key, or network calls.
 
 ## Why AgentShark
 
-- **Failures come first.** An attention queue groups failures into episodes (repeated attempts at one command or file within a turn) and ranks them: blocked by the sandbox, a policy or the network; never recovered; subagents that failed without telling their parent; and claims such as "all tests pass" that no passing test in the logs backs up.
-- **It shows evidence and names no cause.** Each derived value is marked as logged, derived (≈), parsed (~) or inferred by a named rule (?). Missing data appears as a stated gap, never as a zero. AgentShark runs no model.
-- **Every field leads back to its bytes.** The decoded detail tree sits beside the original source record, so you can check any conclusion against the log itself.
-- **Your agent can ask too.** A read-only MCP server lets Claude Code or Codex diagnose its own runs, with home paths and secrets redacted.
-- **Evidence you can keep.** A capture file outlives the agents' own log cleanup, and a shareable profile strips free text and pseudonymizes paths.
-- **Replay without a model.** Run a session's recorded tool calls again in a Docker container without network, and see where the results first diverge.
+- **Failures come first.** Groups repeated attempts into episodes and ranks blocked actions, unrecovered errors, silent subagent failures, and unbacked "all tests pass" claims.
+- **Evidence, not guesswork.** Marks every value as logged, derived (`≈`), parsed (`~`), or rule-inferred (`?`). Missing data is shown as an explicit gap, never as zero, and no LLM is called.
+- **Every field traces to raw bytes.** Inspect decoded fields right beside the original source line or database row.
+- **Agent self-diagnosis (MCP).** A read-only MCP server lets Claude Code or Codex inspect its own past runs with home paths and secrets redacted.
+- **Captures & resource recording.** Save self-contained `.agentcap.zst` bundles (optionally with 10 Hz process-tree CPU, RAM, disk, GPU, and network metrics) and redact before sharing.
+- **Emulator-style replay.** Re-run recorded tool calls in an isolated offline Docker container with breakpoints, single-stepping, and save states.
 
 ## Quick Start
 
-Choose the **macOS app** for a native desktop interface, or the **web viewer** on macOS, Linux or Windows. Both build from source for now; there is no signed app download or published npm package yet.
+Requires [Node.js](https://nodejs.org/) ≥ 24.12 and Git. The native macOS app also requires macOS 15+ and Swift (`xcode-select --install`).
 
-Both paths need [Node.js](https://nodejs.org/) 24.12 or newer and Git. Check with `node --version` and `git --version`. If you already cloned AgentShark, reuse that checkout.
+### Install with One Prompt
+
+Paste into Claude Code, Codex, or another coding agent ([docs/AGENT-INSTALL.md](docs/AGENT-INSTALL.md)):
+
+```text
+Install AgentShark for me: clone https://github.com/naisslab/AgentShark, then follow docs/AGENT-INSTALL.md. On macOS, build, verify and open the native app; on other platforms, set up the web viewer. Also register and check the MCP server for this coding agent.
+```
 
 ### macOS App
-
-You need macOS 15 or later and a Swift toolchain (`swift --version`). If Swift is missing, run `xcode-select --install`, finish Apple's installer, then retry.
 
 ```bash
 git clone https://github.com/naisslab/AgentShark.git ~/agentshark
@@ -63,212 +63,113 @@ npm run desktop:build
 open dist/AgentShark.app
 ```
 
-The app opens, discovers your agent logs and indexes them in the background. Keep it open to watch new sessions; no terminal process needs to stay running. To try synthetic data, choose **Analyze ▸ Explore Bundled Demo**.
+The app discovers and indexes your local agent logs in the background (or choose **Analyze ▸ Explore Bundled Demo** for synthetic traces). Keep the checkout outside iCloud Drive, or set `APP_OUTPUT` to an unsynced folder ([docs/RELEASE.md](docs/RELEASE.md)).
 
-The build bundles its own Node runtime and checks the app signature. It uses an ad hoc signature for local use. Keep the checkout outside iCloud Drive; for a synced checkout, set `APP_OUTPUT` to a folder outside it and open the app at that path. [Build options and verification](docs/RELEASE.md).
+### Web Viewer & CLI
 
-### Web Viewer Only
-
-The web viewer runs directly from source, without `npm install` or a native build:
+Run directly from source without `npm install`:
 
 ```bash
-git clone https://github.com/naisslab/AgentShark.git ~/agentshark
-cd ~/agentshark
-node bin/agentshark.ts demo
+node bin/agentshark.ts demo    # open browser on synthetic traces (cleans up on Ctrl+C)
+node bin/agentshark.ts serve   # index local logs and print an authenticated 127.0.0.1 URL
 ```
 
-This opens a browser on bundled synthetic traces. It does not scan your home folder or change saved settings, and it deletes its temporary index when you press Ctrl+C.
-
-To inspect your own logs, stop the demo with Ctrl+C and run:
-
-```bash
-node bin/agentshark.ts serve
-```
-
-Keep this terminal running while using the viewer. The command prints an authenticated URL such as `http://127.0.0.1:7373/?token=…`; use the new URL after each restart. Windows support is partial; see [installation and troubleshooting](docs/INSTALL.md).
-
-### Install with One Prompt
-
-Paste this into Claude Code, Codex or another coding agent:
-
-```text
-Install AgentShark for me: clone https://github.com/naisslab/AgentShark, then follow docs/AGENT-INSTALL.md. On macOS, build, verify and open the native app; on other platforms, set up the web viewer. Also register and check the MCP server for this coding agent.
-```
-
-For the web viewer on any platform, use this version:
-
-```text
-Install AgentShark for web-only use: clone https://github.com/naisslab/AgentShark, then follow docs/AGENT-INSTALL.md. Set up the CLI and web viewer, and register and check the MCP server for this coding agent.
-```
-
-The [agent guide](docs/AGENT-INSTALL.md) checks prerequisites, builds the selected interface, indexes logs and verifies the installation. It never uses `sudo`. Missing Node or Swift requires installing that prerequisite before setup can finish.
-
-### Try the Demo
-
-In the web viewer, use `node bin/agentshark.ts demo`. In the macOS app, choose **Analyze ▸ Explore Bundled Demo**; **Open in Browser** opens the demo Workbench. Click **Back to viewer** there to follow the first two steps below. Keep the demo window open while using its browser page.
-
-1. In the browser viewer, open **Failures** and select an item under **Blocked by environment**. The Lens shows the denied command and how the turn ended.
-2. Click **Show in Session**, select the failed call, then expand **Raw source line** in the inspector.
-3. Open **Workbench**, choose **Replay Plan**, select **Fix the failing test**, then click **Run Analysis**. The plan lists calls that replay can execute and explains what it skips.
-
-The first index processes recent sessions first; a large history takes minutes. The index can approach the size of your source logs. [First-run behavior and data locations](docs/INSTALL.md#first-run-and-data-locations) explains storage, memory, progress and custom source folders.
-
-## Install
-
-The Quick Start covers both interfaces. To add the `agentshark` command to your PATH, run these commands from the checkout:
-
-```bash
-npm ci
-npm run build
-npm link
-```
-
-If linking fails with a permission error, use `node /absolute/path/to/agentshark/bin/agentshark.ts` wherever the docs say `agentshark`. [INSTALL.md](docs/INSTALL.md) covers upgrades, uninstalling and locally packed npm installs; [RELEASE.md](docs/RELEASE.md) covers macOS build options.
+To add `agentshark` to your `PATH`, run `npm ci && npm run build && npm link` ([docs/INSTALL.md](docs/INSTALL.md)).
 
 ## Supported Agents
 
 | Source | Status | What is read |
 |---|---|---|
-| Claude Code transcripts (`~/.claude/projects`), CLI and desktop Code tab | Fully parsed | Every record type; subagents, workflows, persisted outputs, file history |
-| Claude Cowork transcripts and `audit.jsonl` | Fully parsed | Transcripts as above; the audit log adds turn timing, time to first token, cost, permissions and retries |
-| Claude desktop registries (`local_*.json`) | Metadata only | Titles, models, permission mode, worktrees and pull requests; sessions whose transcripts were deleted |
-| Codex rollouts (`~/.codex/sessions`, `archived_sessions`): CLI, Desktop, exec, VS Code | Fully parsed | Every envelope and legacy record type; continuation pages, child threads, zstd-compressed (`.jsonl.zst`) rollouts |
-| Codex `state_5.sqlite` | Metadata only | Titles, archive state, spawn edges |
-| GitHub Copilot Chat documents (`chatSessions/*.json` and `*.jsonl`) | Partially parsed | Prompts, responses, request timing, logged token counts and agent-mode tool calls with timing and terminal exit codes; edit snapshots are not decoded |
-| GitHub Copilot CLI and newer VS Code agents (`~/.copilot/session-state`) | Partially parsed | Prompts, responses, reasoning, tools, permissions, hooks, subagent and context events; persisted per-call usage, cache tokens and latency when recorded |
-| Google Antigravity (`~/.gemini/antigravity/conversations/*.db`) | Partially parsed | Prompts, responses, thinking summaries, model calls with logged duration, time to first token and tokens, tool calls with timing, exit codes and permission prompts, and subagent links; older conversations stored as encrypted `.pb` files cannot be read |
-| ChatGPT desktop, Gemini CLI, Cursor, Windsurf, Ollama, opencode | Detected, not parsed | `agentshark sources` reports that the agent is installed and why its logs cannot be read |
+| Claude Code (`~/.claude/projects`), CLI & desktop Code tab | Fully parsed | Every record type; subagents, workflows, persisted outputs, file history |
+| Claude Cowork transcripts & `audit.jsonl` | Fully parsed | Transcripts plus turn timing, TTFT, cost, permissions, and retries |
+| Claude desktop registries (`local_*.json`) | Metadata only | Titles, models, permission mode, worktrees, PRs, and deleted transcripts |
+| Codex rollouts (`~/.codex/sessions`, `archived_sessions`) & `state_5.sqlite` | Fully parsed | CLI, Desktop, exec, VS Code; `.jsonl.zst` rollouts, child threads, spawn edges |
+| GitHub Copilot Chat (`chatSessions/*.json`, `*.jsonl`) & CLI (`~/.copilot/session-state`) | Partially parsed | Prompts, responses, reasoning, tool calls with timing/exit codes, permissions, subagents, and persisted token usage |
+| Google Antigravity (`~/.gemini/antigravity/conversations/*.db`) | Partially parsed | Prompts, responses, thinking summaries, model latency/TTFT/tokens, timed tool calls, exit codes, permissions, and subagents (unencrypted `.db`) |
+| ChatGPT desktop, Gemini CLI, Cursor, Windsurf, Ollama, opencode | Detected | `agentshark sources` reports installation and log availability |
 
-AgentShark keeps unknown JSON records as `raw.unknown` events with their source line. Antigravity database events retain selected decoded metadata and a step index, but have no raw source line; malformed rows produce diagnostics. Antigravity rows still in the write-ahead log appear after the app checkpoints them. `agentshark sources` (the Sources workspace in the viewer) measures which capabilities the logs on this machine actually provide for each agent: timestamps, latencies, exit codes, token usage, reasoning text and more.
-
-Copilot support reads existing local logs. To preserve those sessions, run `agentshark index --agent cp`, then `agentshark capture --agent cp -o copilot.agentcap.zst`. Open the capture with `agentshark open copilot.agentcap.zst`. Newer agent logs persist per-call usage; older saved logs may lack token counts and model latency. AgentShark does not download GitHub cloud coding-agent sessions.
+Unknown JSON records are preserved as `raw.unknown` with their full source line; `agentshark sources` measures which fields each agent's logs provide on your machine ([docs/ADAPTERS.md](docs/ADAPTERS.md)).
 
 ## A Tour of the Viewer
 
-The viewer opens on **Failures** when an alarm fires (for example, a run that loops, stalls or is blocked) or new items need attention since your last visit; otherwise it reopens where you left off. Alt+1 to Alt+7 switch between the seven workspaces.
+Switch between the seven workspaces with `Alt+1`–`Alt+7` (`e`/`E` next/previous failure, `u` next attention item, `Shift+Enter` show in session, `f` follow stream, `c` copy redacted report):
 
 | Workspace | What it shows |
 |---|---|
-| **Failures** | The attention queue, and the Lens: the observed chain of the selected failure, each attempt with the edits between attempts, how it closed, and whether earlier sessions hit the same error and what got past it |
-| **Events** | A filterable list of every event, the decoded detail tree and the raw source record |
-| **Session** | One run as Steps (turns, model steps, tool calls and a run report), as a Transcript or as a Flow diagram |
-| **Timeline** | Sessions, subagents, tool calls, background processes and failure bands on one time axis |
-| **Statistics** | Summary, tools, models and turns; Performance shows where time went, and the I/O graph plots any metric over time |
-| **Diagnostics** | Like Wireshark's Expert Information: tool and API errors, retries, refusals, denied permissions, unpaired calls and unparseable records, grouped by severity and linked to their events |
-| **Sources** | Per-agent logging health: what the logs on this machine record and what they lack |
+| **Failures** | Attention queue and the Lens: failure chain, retries, edits between attempts, resolution, and prior matching errors |
+| **Events** | Filterable event list, decoded detail tree, and raw source record |
+| **Session** | Single run as Steps, Transcript, Flow, Critical Path, or Reliability; Compare aligns two runs |
+| **Timeline** | Sessions, subagents, tool calls, background processes, and failure bands on one time axis |
+| **Statistics** | Summary, tools, models, turns, Performance lanes, Session/Host Resources, and I/O Graph |
+| **Diagnostics** | Wireshark-style Expert Information: errors, retries, refusals, denied permissions, unpaired calls, and malformed rows |
+| **Sources** | Per-agent logging coverage and health on this machine |
 
-The screenshots below show the macOS app; the browser viewer has the same workspaces and the same numbers.
-
-**Session ▸ Steps** lays out one run as turns and model steps. Each turn shows its outcome, failed calls are marked in red, and the header strip splits wall time into waiting, tools, model and time that no log accounts for.
+**Session ▸ Steps** lays out turns and model steps, highlights failed calls in red, and splits wall time into waiting, tools, model, and unaccounted gaps.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/session-dark.png">
   <img alt="Session Steps view of a Codex run that reviewed AgentShark's interface: 81 steps, 44 of them in subagents, a table of steps with intent, tool calls, active time, context size and model time, and the blocked call marked in red." src="docs/images/session-light.png">
 </picture>
 
-**Events** works like Wireshark's packet list. A strip above the list shows when events happened, the Detail pane decodes the selected event, and the Raw pane shows the source record with its byte offsets.
+**Events** pairs a timeline strip and filterable packet list with the decoded Detail pane and byte-offset Raw record.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/events-dark.png">
   <img alt="Events view of the same Codex run, with a failed npm command selected, its decoded failure fields, and the raw rollout record beside byte offsets." src="docs/images/events-light.png">
 </picture>
 
-**Timeline** puts a run and its subagents on one axis, with lanes for turns, model calls, shell commands, delegations and failures.
+**Timeline** aligns a run and its subagents across turns, model calls, shell commands, delegations, and failures.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/timeline-dark.png">
   <img alt="Timeline of the Codex run, its two review subagents and a guardian reviewer, with lanes for turns, model calls, shell commands and delegations." src="docs/images/timeline-light.png">
 </picture>
 
-**Statistics ▸ Performance** starts with headline figures (model calls, median call duration, first token, output speed, cache reuse and busy time), then puts lanes on one time axis: where time went (model, tools, compaction, API retries, and waiting for a process, a subagent or a human), the slowest intervals, call duration, first token, output speed and cache reuse. Idle time between busy periods collapses, one cursor reads every lane, and dragging across a lane zooms in.
+**Statistics ▸ Performance** summarizes call latency, TTFT, output speed, and cache reuse, with synchronized zoomable lanes and collapsed idle gaps.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/performance-dark.png">
   <img alt="Statistics Performance view over 13 runs: about 3,000 model calls with a median first token of 8 seconds and 98% cache reuse, and lanes for where time went, the slowest intervals, call duration, first token, output speed and cache reuse." src="docs/images/performance-light.png">
 </picture>
 
-**Statistics ▸ I/O Graph** plots one metric per interval, as Wireshark's I/O graph does: events, errors, input or output tokens, tool or model calls, model latency, time to first token, output speed, context size or failures. Dragging across the graph sets the time scope, and the bins copy as CSV.
+**Statistics ▸ I/O Graph** plots events, errors, tokens, latency, or context size over time and exports bins as CSV.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/io-graph-dark.png">
   <img alt="Statistics I/O graph of events per hour across nine days, with bursts of agent activity and a table of bins below." src="docs/images/io-graph-light.png">
 </picture>
 
-A few keys move through an investigation quickly: `e` and `E` jump to the next or previous failure, `u` to the next attention item, and Shift+Enter shows the selection in its session step. `f` follows one tool call, subagent, background process or file as a stream, and `c` opens a redacted report to copy into an issue or hand to a fresh agent.
+## CLI, MCP, Captures, Replay & Workbench
 
-## Diagnose from the Terminal
-
-```bash
-agentshark why                       # the latest finished run
-agentshark failures --since 7d       # failures that need attention
-agentshark sig "Error: Cannot find module 'left-pad'"  # previous occurrences
-```
-
-`why` prints a run report with evidence links; add `--json` for structured output. The [CLI guide](docs/CLI.md) includes an example report, display filters and every command.
-
-## MCP Server for Agents
-
-The read-only MCP server lets a coding agent query past runs. The agent-assisted installer registers it; [manual setup and verification](docs/MCP.md) covers Claude Code and Codex.
-
-Keep the macOS app or `agentshark serve` running to index new sessions, or run `agentshark index` before querying. MCP reads the index and does not refresh it. Restart your coding-agent session after registration and ask it to use AgentShark's `find_runs` tool.
-
-By default, results cover only the project where your coding agent is working. An empty result from the AgentShark checkout does not mean installation failed. Start the agent in the project you want to inspect; use `--scope all` only when you want every project. [MCP scope, freshness and troubleshooting](docs/MCP.md#verify-and-keep-results-current).
-
-## Keep and Share Evidence with Captures
-
-`agentshark capture -o FILE.agentcap.zst --since 7d` saves a self-contained copy of selected sessions. `agentshark open FILE` opens it later, even after the source agent deletes its logs.
-
-Default captures retain private text and raw records. For sharing, preview the redacted profile with `agentshark capture --profile shareable --preview --session ID`. Review the result before sharing. [Capture profiles and integrity](docs/CAPTURES.md).
-
-## Replay a Session
-
-`agentshark replay SESSION --dry-run` shows which recorded actions can run again. To execute the plan, supply the starting files with `--workspace DIR`; replay needs Docker and runs without network by default. It calls no model and compares new results with the recording.
-
-A replay works like an emulator. On a terminal you can pause it, step one batch at a time, open a shell in its container and save the state as an image. `--break status` stops at the first status difference, and `agentshark replay --resume NAME` continues a stopped replay or starts again from a saved image. Before the first call, the header lists the programs that the recorded commands start and the image lacks. [Replay commands and limits](docs/REPLAY.md).
-
-## Workbench for Engineers and Researchers
-
-Open **Workbench** in the browser viewer, or **Analyze ▸ Open Research Tools in Browser** in the macOS app. Select a session, choose a tool and click **Run Analysis**.
-
-Critical Path shows where time went; Compare Runs shows where two attempts diverged. Both also run natively in the macOS app. Other tools inspect context, edits and verification, cache behavior, coordination, replay plans and research datasets. Each analysis states the limits of its evidence. The [Workbench guide](docs/WORKBENCH.md) covers the tools, saved recipes, exports and CI checks.
+- **Terminal triage ([docs/CLI.md](docs/CLI.md)):**
+  ```bash
+  agentshark why                                         # run report for the latest finished session
+  agentshark failures --since 7d                         # failures needing attention
+  agentshark sig "Error: Cannot find module 'left-pad'"  # matching failures across history
+  ```
+- <a id="mcp-server-for-agents"></a>**MCP Server ([docs/MCP.md](docs/MCP.md)):** Exposes read-only tools (`find_runs`, failure and step queries) scoped to the active project by default (`--scope all` for all projects). Keep the app or `agentshark serve` running, or run `agentshark index` before querying.
+- **Captures & Resource Metrics ([docs/CAPTURES.md](docs/CAPTURES.md)):** Run `agentshark serve --record-resources` (or start recording in the app) for 10 Hz session process-tree CPU/RAM/disk/GPU/network metrics. Save traces with `agentshark capture -o run.agentcap.zst --since 7d`, preview redaction with `--profile shareable --preview`, and reopen with `agentshark open`.
+- **Replay ([docs/REPLAY.md](docs/REPLAY.md)):** Preview with `agentshark replay SESSION --dry-run` or execute in offline Docker with `--workspace DIR`. Supports interactive stepping, container shell, `--break status`, and `--resume NAME`.
+- **Workbench ([docs/WORKBENCH.md](docs/WORKBENCH.md)):** Native macOS modes for **Critical Path**, **Compare Runs**, and **Reliability Checks**, plus browser tools for context, edit verification, cache behavior, coordination, replay plans, and dataset export.
 
 ## Privacy and Safety
 
-Agent logs contain source code, prompts and sometimes credentials, so AgentShark treats them carefully:
-
-- It reads agent logs and never modifies them. It never reads credential files (`~/.codex/auth.json`, `*.key`, `.audit-key`, cookies, browser storage).
-- The viewer binds to `127.0.0.1` and requires a token that changes with every server start.
-- The MCP server is read-only, limited to the agent's own project by default, and redacts home paths, your user name and secret-shaped strings.
-- A default capture contains private text. Only the shareable profile removes it, and even then, review a capture before you share it.
-
-Report security problems privately as described in [SECURITY.md](SECURITY.md), never with a real trace in a public issue.
-
-## Command Reference
-
-Run `agentshark --help` to list commands and `agentshark <command> --help` for options. See [CLI commands and display filters](docs/CLI.md) for examples and the complete reference.
+- **Read-only on logs:** Never modifies agent logs or reads credential files (`~/.codex/auth.json`, `*.key`, `.audit-key`, cookies, browser storage).
+- **Local & authenticated:** Viewer binds to `127.0.0.1` with a per-launch token; MCP redacts home paths, usernames, and secret patterns.
+- **Explicit sharing:** Default captures retain raw text; use `--profile shareable` and review before sharing. Report vulnerabilities via [SECURITY.md](SECURITY.md).
 
 ## Documentation
 
 | Document | Covers |
 |---|---|
-| [INSTALL.md](docs/INSTALL.md), [RELEASE.md](docs/RELEASE.md) | Installation, source configuration, troubleshooting, the app build and its bundled runtime |
-| [CLI.md](docs/CLI.md), [MCP.md](docs/MCP.md) | Commands, display filters, agent integration, scope and freshness |
-| [WORKBENCH.md](docs/WORKBENCH.md), [INTEROP.md](docs/INTEROP.md) | Analyses, research workflows, CI checks and offline telemetry conversion |
-| [CAPTURES.md](docs/CAPTURES.md), [FORMAT.md](docs/FORMAT.md) | Capture integrity, recorded analysis, redacted sharing and the `.agentcap` format |
-| [REPLAY.md](docs/REPLAY.md) | `agentshark replay` and what it cannot reproduce |
-| [ADAPTERS.md](docs/ADAPTERS.md) | The contract for contributors who add a trace source |
-| [AGENT-INSTALL.md](docs/AGENT-INSTALL.md) | The steps a coding agent follows to install AgentShark for you |
+| [INSTALL.md](docs/INSTALL.md), [RELEASE.md](docs/RELEASE.md), [AGENT-INSTALL.md](docs/AGENT-INSTALL.md) | Setup, source locations, macOS app build, and agent-driven install |
+| [CLI.md](docs/CLI.md), [MCP.md](docs/MCP.md) | CLI commands, display filters, and MCP configuration |
+| [WORKBENCH.md](docs/WORKBENCH.md), [INTEROP.md](docs/INTEROP.md) | Workbench analyses, CI checks, and OTLP/OpenInference conversion |
+| [CAPTURES.md](docs/CAPTURES.md), [FORMAT.md](docs/FORMAT.md), [REPLAY.md](docs/REPLAY.md) | Resource recording, `.agentcap` format, redaction, and container replay |
+| [ADAPTERS.md](docs/ADAPTERS.md), [CHANGELOG.md](CHANGELOG.md) | Adding trace adapters and release notes (v0.1.0; heuristic rules are advisory) |
 
-## Project Status
-
-AgentShark is at version 0.1.0 and has not had a public release. There is no signed and notarized macOS build and no published npm package yet, so the paths above build from source. A hand audit of about 1,100 sampled findings from one index found six inferred rules below the 0.8 precision that AgentShark requires of a shipped label. Recall has not been measured, and no reviewed held-out trace set exists yet, so treat heuristic findings as advisory. [CHANGELOG.md](CHANGELOG.md) lists what has changed.
-
-## Contributing
+## Contributing & License
 
 The test suites are not in this repository yet. Build a change with `npm ci` and `npm run build`, try it with `node bin/agentshark.ts demo` and on your own logs, and say in the pull request what you tested.
 
-The macOS client builds with Swift Package Manager. Use only synthetic or explicitly consented, redacted fixtures, and never submit private agent logs or index databases. [CONTRIBUTING.md](CONTRIBUTING.md) covers adding an adapter, the data a contribution may include and measuring performance on an official Node build.
-
-## License
-
-[MIT](LICENSE). The macOS app bundles an official Node.js runtime under its own license; see [NOTICE](NOTICE).
+The macOS client builds with Swift Package Manager. Submit only synthetic or redacted fixtures ([CONTRIBUTING.md](CONTRIBUTING.md)). Licensed under [MIT](LICENSE) ([NOTICE](NOTICE)).
