@@ -1,6 +1,6 @@
 # Contributing to AgentShark
 
-Use Node.js 24 LTS and `npm ci`, then `npm run build`. The test suites are not in this repository yet, so try a change with `node bin/agentshark.ts demo` and on your own logs, and say in the pull request what you tested.
+Use Node.js 24 LTS and `npm ci`, then run `npm test` and `npm run build`. The public tests cover Copilot tool-output normalization, Reliability Checks, and index migration. Try other changes with `node bin/agentshark.ts demo` and on your own logs, and say in the pull request what you tested.
 
 Develop and measure on an official Node.js build: one from nodejs.org, or the runtime the desktop app ships, which `node scripts/fetch-runtime.mjs` downloads into `.runtime/` and whose `node` path it prints. Homebrew's `node` links Homebrew's SQLite, which is built with `SQLITE_ENABLE_MEMORY_MANAGEMENT` (its `PRAGMA compile_options` lists `ENABLE_MEMORY_MANAGEMENT`). Every SQLite connection in the process then shares one page cache behind a global mutex, so the derive pool and the query workers scale worse than in the shipped app. AgentShark runs correctly there, but performance measured on it does not represent the app, and raising `AGENTSHARK_QUERY_WORKERS` there can make concurrent queries slower than running them one at a time.
 
