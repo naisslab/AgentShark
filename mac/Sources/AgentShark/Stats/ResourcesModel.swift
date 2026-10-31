@@ -56,12 +56,12 @@ struct ResourceAgentTotal: Identifiable {
     let id: String
     let sessions: Int
     let projection: ResourceProjection
-    var name: String { ["codex": "Codex", "claude-code": "Claude Code", "claude-cowork": "Claude Cowork", "copilot": "Copilot Chat"][id] ?? "Agent" }
+    var name: String { ["codex": "Codex", "claude-code": "Claude Code", "claude-cowork": "Claude Cowork", "copilot": "Copilot Chat", "antigravity": "Antigravity"][id] ?? "Agent" }
 
     static func project(_ frame: ResourceActivity, sessions: [String]) -> [Self] {
         let selected = frame.bindings.filter { sessions.isEmpty || sessions.contains($0.session) }
         let groups = Dictionary(grouping: selected) { binding in
-            binding.agent ?? ["cx": "codex", "cc": "claude-code", "cw": "claude-cowork", "cp": "copilot"][String(binding.session.prefix(2))] ?? "agent"
+            binding.agent ?? ["cx": "codex", "cc": "claude-code", "cw": "claude-cowork", "cp": "copilot", "ag": "antigravity"][String(binding.session.prefix(2))] ?? "agent"
         }
         return groups.keys.sorted().map { agent in
             let ids = groups[agent]!.map(\.session)

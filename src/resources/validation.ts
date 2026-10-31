@@ -7,7 +7,7 @@ const pid = (n: any) => Number.isSafeInteger(n) && n > 0;
 const id = (s: any) => typeof s === 'string' && s.length > 0 && s.length <= 512;
 export function validBindings(v: any): v is SessionBinding[] {
   if (!(Array.isArray(v) && v.length <= 64 && v.every((b) => fields(b, ['session', 'roots', 'starts', 'agent', 'discovered', 'shared']) && id(b.session)
-    && (b.agent === undefined || ['codex','claude-code','claude-cowork','copilot'].includes(b.agent))
+    && (b.agent === undefined || ['codex','claude-code','claude-cowork','copilot','antigravity'].includes(b.agent))
     && (b.discovered === undefined || b.discovered === true) && (b.shared === undefined || typeof b.shared === 'boolean')
     && (b.starts === undefined || Array.isArray(b.starts) && b.starts.length === b.roots?.length && b.starts.every(id))
     && (!b.discovered || b.starts && b.agent)

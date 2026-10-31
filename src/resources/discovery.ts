@@ -126,7 +126,7 @@ export function createResourceDiscovery(database: () => DatabaseSync, scan?: (so
     const db = database();
     // Metadata only; never scan event payloads or open transcript contents.
     const sources = db.prepare(`SELECT id,path FROM sources WHERE exists_now=1 AND kind IN
-      ('rollout','transcript','subagent-transcript','workflow-transcript','chat-session') ORDER BY mtime_ms DESC,id LIMIT 8193`).all() as unknown as Source[];
+      ('rollout','transcript','subagent-transcript','workflow-transcript','chat-session','session-events','trajectory-db') ORDER BY mtime_ms DESC,id LIMIT 8193`).all() as unknown as Source[];
     const truncated = sources.length > 8192; sources.length = Math.min(sources.length, 8192);
     if (!sources.length) return { bindings: [], truncated };
     let writers: Writers;

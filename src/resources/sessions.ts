@@ -15,7 +15,7 @@ export function validateBindings(bindings: SessionBinding[]): void {
       || sessions.has(b.session) || !Array.isArray(b.roots) || !b.roots.length) throw new Error('Each session binding needs one unique session ID and positive root PIDs');
     sessions.add(b.session);
     if (new Set(b.roots).size !== b.roots.length || (b.discovered && (!b.starts || b.starts.length !== b.roots.length
-      || b.starts.some((s) => !/^\d+$/.test(s)) || !['codex','claude-code','claude-cowork','copilot'].includes(b.agent ?? '')))) throw new Error('Invalid discovered process identity');
+      || b.starts.some((s) => !/^\d+$/.test(s)) || !['codex','claude-code','claude-cowork','copilot','antigravity'].includes(b.agent ?? '')))) throw new Error('Invalid discovered process identity');
     for (const pid of b.roots) {
       const owner = owners.get(pid);
       if (!Number.isSafeInteger(pid) || pid <= 0 || pid > 2 ** 31 - 1 || (owner && !(owner.discovered && b.discovered && owner.shared && b.shared

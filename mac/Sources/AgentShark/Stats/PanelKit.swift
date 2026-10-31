@@ -458,7 +458,7 @@ extension PanelKit {
     /// The display label of an agent kind string.
     static func agentLabel(_ raw: String) -> String { AgentKind(rawValue: raw).label }
 
-    /// Whether a string is a session ID (`cc:…`, `cw:…`, `cx:…`, `cp:…`).
+    /// Whether a string is a session ID (`cc:…`, `cw:…`, `cx:…`, `cp:…`, `ag:…`).
     static func isSessionID(_ s: String) -> Bool {
         guard s.count > 3, s.dropFirst(2).first == ":" else { return false }
         return AgentKind.known.contains { s.hasPrefix($0.prefix + ":") }
