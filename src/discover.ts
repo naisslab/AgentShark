@@ -6,7 +6,7 @@ import { ADAPTERS } from './adapters/registry.ts';
 
 export async function discoverSources(env: DiscoverEnv = defaultEnv()): Promise<SourceFile[]> {
   const results = await Promise.allSettled(ADAPTERS.map((a) =>
-    env.autoDiscover === false && !['claude', 'codex', 'codex-state'].includes(a.name) ? Promise.resolve([]) : a.discover(env)));
+    env.autoDiscover === false && !['claude', 'codex', 'codex-state', 'antigravity', 'gemini', 'deepseek'].includes(a.name) ? Promise.resolve([]) : a.discover(env)));
   const byPath = new Map<string, SourceFile>();
   results.forEach((r, i) => {
     if (r.status === 'rejected') {

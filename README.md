@@ -85,8 +85,10 @@ To add `agentshark` to your `PATH`, run `npm ci && npm run build && npm link` ([
 | Claude desktop registries (`local_*.json`) | Metadata only | Titles, models, permission mode, worktrees, PRs, and deleted transcripts |
 | Codex rollouts (`~/.codex/sessions`, `archived_sessions`) & `state_5.sqlite` | Fully parsed | CLI, Desktop, exec, VS Code; `.jsonl.zst` rollouts, child threads, spawn edges |
 | GitHub Copilot Chat (`chatSessions/*.json`, `*.jsonl`) & CLI (`~/.copilot/session-state`) | Partially parsed | Prompts, responses, reasoning, tool calls with timing/exit codes, permissions, subagents, and persisted token usage |
-| Google Antigravity (`~/.gemini/antigravity/conversations/*.db`) | Partially parsed | Prompts, responses, thinking summaries, model latency/TTFT/tokens, timed tool calls, exit codes, permissions, and subagents (unencrypted `.db`) |
-| ChatGPT desktop, Gemini CLI, Cursor, Windsurf, Ollama, opencode | Detected | `agentshark sources` reports installation and log availability |
+| Google Antigravity (`Antigravity.app`, IDE, CLI: `~/.gemini/antigravity/{conversations,brain}`) | Parsed | Conversation `.db` trajectories plus live `transcript_full.jsonl` logs (recovering uncheckpointed WAL and `.pb`-only runs with raw byte offsets), TTFT/latency, tokens, tools, permissions, and subagents |
+| Google Gemini (`Gemini.app` Code Mode & `VegaTrajectoryArchives`, Gemini CLI `~/.gemini/tmp/*/chats`) | Partially parsed | Local Code Mode trajectories (`source = 21`), Runtime Inspector archives, and Gemini CLI `session-*.json` transcripts with thoughts, token usage, and tool calls |
+| DeepSeek Harness (`DeepSeek Harness.app` & `dsh` CLI: `~/.dsh/sessions/*/*/session.v*.jsonl.zstd`) | Fully parsed | Multi-frame Zstandard session streams, stream-derived TTFT & model latency, cache/token usage, shell jobs with exit codes & PIDs, approvals, and subagent/team trees |
+| ChatGPT desktop, Cursor, Windsurf, Ollama, opencode | Detected | `agentshark sources` reports installation and log availability |
 
 Unknown JSON records are preserved as `raw.unknown` with their full source line; `agentshark sources` measures which fields each agent's logs provide on your machine ([docs/ADAPTERS.md](docs/ADAPTERS.md)).
 

@@ -65,6 +65,8 @@ enum Theme {
         case .codex: return dynamic(0x3556C8, 0x8AA4F7)
         case .copilot: return dynamic(0x6F42C1, 0xAD93F2)
         case .antigravity: return dynamic(0x1A7F4B, 0x6FCF97)
+        case .gemini: return dynamic(0x1967D2, 0x66B2FF)
+        case .deepseek: return dynamic(0x0B6E8C, 0x4FD1D9)
         default: return .secondaryLabelColor
         }
     }
@@ -246,15 +248,38 @@ extension NSAppearance {
 
 /// Tool kind of a tool name (mirrors toolKind() in src/adapters/adapter.ts; EventRow carries only the name).
 enum ToolKinds {
-    static let shell: Set<String> = ["Bash", "BashOutput", "KillShell", "KillBash", "exec_command", "write_stdin", "shell_command", "shell",
-                                     "local_shell", "mcp__workspace__bash"]
-    static let file: Set<String> = ["Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "NotebookRead", "Glob", "Grep", "LS", "apply_patch",
-                                    "view_image"]
-    static let web: Set<String> = ["WebFetch", "WebSearch", "web_search", "web_search_call", "mcp__workspace__web_fetch"]
-    static let agent: Set<String> = ["Agent", "Task", "Workflow", "SendMessage", "spawn_agent", "send_message", "followup_task", "wait_agent",
-                                     "list_agents", "interrupt_agent", "close_agent", "send_input", "wait"]
-    static let plan: Set<String> = ["TodoWrite", "TodoRead", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskStop", "TaskOutput",
-                                    "update_plan", "ExitPlanMode", "EnterPlanMode"]
+    static let shell: Set<String> = [
+        "Bash", "BashOutput", "KillShell", "KillBash", "exec_command", "write_stdin", "shell_command", "shell",
+        "local_shell", "mcp__workspace__bash", "bash", "bash_persistent", "pwsh", "pwsh_persistent", "read_bash",
+        "write_bash", "stop_bash", "list_bash", "powershell", "run_in_terminal", "get_terminal_output",
+        "run_command", "command_status", "send_command_input", "read_terminal", "run_shell_command",
+        "job_output", "job_kill", "job_list",
+    ]
+    static let file: Set<String> = [
+        "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "NotebookRead", "Glob", "Grep", "LS", "apply_patch",
+        "view_image", "view", "create", "edit", "read", "write", "read_image", "present", "str_replace_editor",
+        "glob", "grep", "read_file", "create_file", "replace_string_in_file", "multi_replace_string_in_file",
+        "insert_edit_into_file", "file_search", "grep_search", "list_dir", "copilot_readFile", "write_file",
+        "edit_file", "view_file", "view_file_outline", "view_code_item", "write_to_file", "replace_file_content",
+        "multi_replace_file_content", "find_by_name", "codebase_search", "replace", "list_directory",
+        "search_file_content", "read_many_files", "edit_notebook", "read_notebook",
+    ]
+    static let web: Set<String> = [
+        "WebFetch", "WebSearch", "web_search", "web_search_call", "mcp__workspace__web_fetch", "web_fetch",
+        "fetch_webpage", "search_web", "read_url_content", "google_web_search",
+    ]
+    static let agent: Set<String> = [
+        "Agent", "Task", "Workflow", "SendMessage", "spawn_agent", "send_message", "followup_task", "wait_agent",
+        "list_agents", "interrupt_agent", "close_agent", "send_input", "wait", "task", "runSubagent", "subagent",
+        "subagent_fork", "spawn_teammate", "list_subagent_models", "invoke_subagent", "browser_subagent",
+        "manage_subagents", "define_subagent", "swarm", "run_workflow",
+    ]
+    static let plan: Set<String> = [
+        "TodoWrite", "TodoRead", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskStop", "TaskOutput",
+        "update_plan", "ExitPlanMode", "EnterPlanMode", "update_todo", "manage_todo_list", "todo_write",
+        "exit_plan_mode", "create_goal", "get_goal", "task_boundary", "manage_task", "schedule",
+        "schedule_create", "schedule_edit", "schedule_update", "schedule_delete", "schedule_list", "schedule_view",
+    ]
 
     /// `shell | file | web | mcp | agent | plan | custom | other`, or nil without a name.
     static func kind(of name: String?) -> String? {

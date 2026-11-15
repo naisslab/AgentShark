@@ -18,6 +18,9 @@ export interface DiscoverEnv {
   /** Additional agent data directories; defaults stay enabled unless autoDiscover is false. */
   claudeRoots?: string[];
   codexRoots?: string[];
+  antigravityRoots?: string[];
+  geminiRoots?: string[];
+  deepseekRoots?: string[];
   autoDiscover?: boolean;
   /** Restrict discovery to these agents (undefined = all). */
   agents?: AgentKind[];
@@ -31,9 +34,19 @@ export function defaultEnv(): DiscoverEnv {
   return { home, appSupport: platformAppSupport(home), ...config };
 }
 
-export function agentRoots(env: DiscoverEnv, agent: 'claude' | 'codex'): string[] {
-  return [...new Set([...(env.autoDiscover === false ? [] : [join(env.home, `.${agent}`)]),
-    ...(agent === 'claude' ? env.claudeRoots ?? [] : env.codexRoots ?? [])])];
+export function agentRoots(env: DiscoverEnv, agent: 'claude' | 'codex' | 'antigravity' | 'gemini' | 'deepseek'): string[] {
+  const defaults = env.autoDiscover === false ? [] : (
+    agent === 'antigravity' ? [join(env.home, '.gemini', 'antigravity'), join(env.home, '.gemini', 'antigravity-ide')] :
+    agent === 'deepseek' ? [join(env.home, '.dsh')] :
+    [join(env.home, `.${agent}`)]
+  );
+  const custom =
+    agent === 'claude' ? env.claudeRoots :
+    agent === 'codex' ? env.codexRoots :
+    agent === 'antigravity' ? env.antigravityRoots :
+    agent === 'gemini' ? env.geminiRoots :
+    env.deepseekRoots;
+  return [...new Set([...defaults, ...(custom ?? [])])];
 }
 
 export interface SourceFile {
@@ -118,20 +131,27 @@ export function isCredentialPath(path: string): boolean {
   const base = path.split('/').pop() ?? '';
   return (
     base === 'auth.json' ||
+    base === '.credentials.yaml' ||
+    base === 'credentials.yaml' ||
+    base === '.env' ||
+    base === 'jetski-standalone-oauth-token' ||
+    base === 'oauth_creds.json' ||
+    base === 'google_accounts.json' ||
+    base === 'credential-user-scope' ||
     base.endsWith('.key') ||
     base === '.audit-key' ||
     base === 'Cookies' ||
     base === 'buddy-tokens.json' ||
-    /\/(Local Storage|IndexedDB|Session Storage|mcp-oauth[^/]*|oauth[^/]*)\//i.test(path)
+    /\/(Local Storage|IndexedDB|Session Storage|mcp-oauth[^/]*|oauth[^/]*|git-mcp-credentials)\//i.test(path)
   );
 }
 
 // ---------------------------------------------------------------------------
 // Source bytes
 
-/** A zstd-compressed source (a finished Codex rollout, `.jsonl.zst`). Its offsets, lengths and hashes refer to the decompressed bytes. */
+/** A zstd-compressed source (Codex `.jsonl.zst`, DeepSeek Harness `.jsonl.zstd`). Its offsets, lengths and hashes refer to the decompressed bytes. */
 export function isZstd(path: string): boolean {
-  return path.endsWith('.zst');
+  return path.endsWith('.zst') || path.endsWith('.zstd');
 }
 
 /** Positional reads of a source file: a FileHandle, or the decompressed bytes of a zstd file. */
@@ -201,13 +221,74 @@ class ZstdSource implements SourceHandle {
   }
 }
 
+/**
+ * Decompresses single-frame and multi-frame zstd streams (such as DeepSeek Harness `.jsonl.zstd` append logs)
+ * plus skippable metadata frames (`0x184d2a50..0x184d2a5f`), using bounded 256 KB sliding reads.
+ */
 async function* zstdChunks(fh: FileHandle, path: string): AsyncGenerator<Buffer> {
   const { size } = await fh.stat();
-  const z = createZstdDecompress();
-  // Decoding errors end the iteration; the pipeline's own callback has nothing to add.
-  yield* pipeline(fh.createReadStream({ start: 0, autoClose: false, highWaterMark: 1 << 20 }), z, () => {});
-  // Node's decoder ends after the first frame and leaves any later frames unread.
-  if (z.bytesWritten < size) throw new Error(`${path}: only single-frame zstd files can be read`);
+  const WINDOW = 256 << 10;
+  let buf: Buffer = Buffer.alloc(0);
+  let bufStart = 0;
+  let offset = 0;
+  const readWindow = async (pos: number): Promise<Buffer> => {
+    const want = Math.min(WINDOW, size - pos);
+    if (want <= 0) return Buffer.alloc(0);
+    const b = Buffer.allocUnsafe(want);
+    const { bytesRead } = await fh.read(b, 0, want, pos);
+    buf = b.subarray(0, bytesRead);
+    bufStart = pos;
+    return buf;
+  };
+  while (offset < size) {
+    if (offset < bufStart || offset + 8 > bufStart + buf.length) await readWindow(offset);
+    const avail = bufStart + buf.length - offset;
+    if (avail < 4) {
+      if (offset > 0) break;
+      throw new Error(`${path}: truncated zstd frame header at byte ${offset}`);
+    }
+    const at = offset - bufStart;
+    const magic = buf.readUInt32LE(at);
+    if (((magic & 0xfffffff0) >>> 0) === 0x184d2a50) {
+      if (avail < 8) {
+        if (offset > 0) break;
+        throw new Error(`${path}: truncated zstd skippable frame at byte ${offset}`);
+      }
+      const skip = 8 + buf.readUInt32LE(at + 4);
+      if (offset + skip > size) {
+        if (offset > 0) break;
+        throw new Error(`${path}: truncated zstd skippable frame at byte ${offset}`);
+      }
+      offset += skip;
+      continue;
+    }
+    if (magic !== 0xfd2fb528) throw new Error(`${path}: invalid zstd frame magic at byte ${offset}`);
+    const z = createZstdDecompress();
+    const src = (async function* () {
+      let pos = offset;
+      while (pos < size) {
+        if (pos >= bufStart && pos < bufStart + buf.length) {
+          const slice = buf.subarray(pos - bufStart);
+          pos += slice.length;
+          yield slice;
+        } else {
+          const next = await readWindow(pos);
+          if (!next.length) break;
+          pos += next.length;
+          yield next;
+        }
+      }
+    })();
+    try {
+      yield* pipeline(src, z, () => {});
+    } catch (err) {
+      // A live multi-frame writer can be caught mid-append on the final frame; keep all complete frames before it.
+      if (offset > 0 && /unexpected end|premature close|incomplete/i.test(String((err as Error)?.message ?? err))) break;
+      throw err;
+    }
+    if (z.bytesWritten <= 0) throw new Error(`${path}: zstd decoder made no progress at byte ${offset}`);
+    offset += z.bytesWritten;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -441,22 +522,23 @@ export const INDEX_INPUT_MAX_STRING = 1024;
 // ---------------------------------------------------------------------------
 // Tools
 
-// Built-in tool names across Claude, Codex, Copilot and Antigravity.
+// Built-in tool names across Claude, Codex, Copilot, Antigravity, Gemini and DeepSeek Harness.
 const SHELL_TOOLS = new Set(['Bash', 'BashOutput', 'KillShell', 'KillBash', 'exec_command', 'write_stdin', 'shell_command', 'shell', 'local_shell', 'mcp__workspace__bash',
-  'bash', 'read_bash', 'write_bash', 'stop_bash', 'list_bash', 'powershell', 'run_in_terminal', 'get_terminal_output',
-  'run_command', 'command_status', 'send_command_input', 'read_terminal']);
+  'bash', 'bash_persistent', 'pwsh', 'pwsh_persistent', 'read_bash', 'write_bash', 'stop_bash', 'list_bash', 'powershell', 'run_in_terminal', 'get_terminal_output',
+  'run_command', 'command_status', 'send_command_input', 'read_terminal', 'run_shell_command', 'job_output', 'job_kill', 'job_list']);
 const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'apply_patch', 'view_image',
-  'view', 'create', 'edit', 'str_replace_editor', 'glob', 'grep',
+  'view', 'create', 'edit', 'read', 'write', 'read_image', 'present', 'str_replace_editor', 'glob', 'grep',
   'read_file', 'create_file', 'replace_string_in_file', 'multi_replace_string_in_file', 'insert_edit_into_file', 'file_search', 'grep_search', 'list_dir', 'copilot_readFile',
-  'write_file', 'edit_file', 'view_file', 'view_file_outline', 'view_code_item', 'write_to_file', 'replace_file_content', 'multi_replace_file_content', 'find_by_name', 'codebase_search']);
+  'write_file', 'edit_file', 'view_file', 'view_file_outline', 'view_code_item', 'write_to_file', 'replace_file_content', 'multi_replace_file_content', 'find_by_name', 'codebase_search',
+  'replace', 'list_directory', 'search_file_content', 'read_many_files', 'edit_notebook', 'read_notebook']);
 const WEB_TOOLS = new Set(['WebFetch', 'WebSearch', 'web_search', 'web_search_call', 'mcp__workspace__web_fetch', 'web_fetch', 'fetch_webpage',
-  'search_web', 'read_url_content']);
+  'search_web', 'read_url_content', 'google_web_search']);
 const AGENT_TOOLS = new Set(['Agent', 'Task', 'Workflow', 'SendMessage', 'spawn_agent', 'send_message', 'followup_task', 'wait_agent', 'list_agents', 'interrupt_agent', 'close_agent', 'send_input', 'wait',
-  'task', 'runSubagent',
-  'invoke_subagent', 'browser_subagent']);
+  'task', 'runSubagent', 'subagent', 'subagent_fork', 'spawn_teammate', 'list_subagent_models',
+  'invoke_subagent', 'browser_subagent', 'manage_subagents', 'define_subagent', 'swarm', 'run_workflow']);
 const PLAN_TOOLS = new Set(['TodoWrite', 'TodoRead', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TaskOutput', 'update_plan', 'ExitPlanMode', 'EnterPlanMode',
-  'update_todo', 'manage_todo_list',
-  'task_boundary', 'manage_task']);
+  'update_todo', 'manage_todo_list', 'todo_write', 'exit_plan_mode', 'create_goal', 'get_goal',
+  'task_boundary', 'manage_task', 'schedule', 'schedule_create', 'schedule_edit', 'schedule_update', 'schedule_delete', 'schedule_list', 'schedule_view']);
 
 export function toolKind(name: string | undefined, namespace?: string): ToolKindTag {
   if (!name) return 'other';
@@ -601,23 +683,33 @@ function replacementCounts(before: string, after: string): { added: number; remo
 export function editChanges(tool: string, input: unknown, result?: unknown): ChangeFile[] {
   if (!input || typeof input !== 'object') return [];
   const i = input as Record<string, any>;
-  const path = i.file_path ?? i.notebook_path;
+  const path = i.file_path ?? i.notebook_path ?? i.path ?? i.targetFile;
   if (typeof path !== 'string' || !path) return [];
   const r = result && typeof result === 'object' && !Array.isArray(result) ? (result as Record<string, any>) : undefined;
   const hunks: unknown[] = Array.isArray(r?.structuredPatch) ? r.structuredPatch : [];
   const logged = hunks.length ? diffCounts(hunks.flatMap((h: any) => (Array.isArray(h?.lines) ? h.lines : []))) : undefined;
   const unknown = { added: null, removed: null };
   switch (tool) {
-    case 'Write': {
+    case 'Write':
+    case 'write':
+    case 'write_file':
+    case 'write_to_file':
+    case 'create':
+    case 'create_file': {
       const added = typeof i.content === 'string' ? lineCount(i.content) : null;
       if (r?.type === 'create') return [{ path, op: 'add', added, removed: 0 }];
       if (r?.type === 'update') return [{ path, op: 'update', ...(logged ?? unknown) }];
       return [{ path, op: 'write', added, removed: null }];
     }
     case 'Edit':
-    case 'MultiEdit': {
+    case 'MultiEdit':
+    case 'edit':
+    case 'replace': {
       if (logged) return [{ path, op: 'update', ...logged }];
-      const edits: any[] = tool === 'Edit' ? [i] : Array.isArray(i.edits) ? i.edits : [];
+      if (tool === 'replace' && i.expected_replacements !== undefined && i.expected_replacements !== 1) {
+        return [{ path, op: 'update', ...unknown }];
+      }
+      const edits: any[] = tool === 'MultiEdit' ? (Array.isArray(i.edits) ? i.edits : []) : [i];
       const sum = { added: 0, removed: 0 };
       for (const e of edits) {
         if (typeof e?.old_string !== 'string' || typeof e.new_string !== 'string' || e.replace_all === true) return [{ path, op: 'update', ...unknown }];
@@ -627,6 +719,10 @@ export function editChanges(tool: string, input: unknown, result?: unknown): Cha
       }
       return [{ path, op: 'update', ...sum }];
     }
+    case 'edit_file':
+    case 'replace_file_content':
+    case 'multi_replace_file_content':
+      return [{ path, op: 'update', ...unknown }];
     case 'NotebookEdit': {
       const mode = i.edit_mode ?? 'replace';
       const source = typeof i.new_source === 'string' ? lineCount(i.new_source) : null;

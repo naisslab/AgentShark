@@ -17,17 +17,59 @@ struct SourcesSettingsView: View {
         case ready([HealthReport])
     }
 
+    private enum SourceTarget: CaseIterable, Identifiable {
+        case claude, codex, antigravity, gemini, deepseek
+        var id: Self { self }
+
+        var menuLabel: String {
+            switch self {
+            case .claude: return "Claude Code (.claude)…"
+            case .codex: return "Codex (.codex)…"
+            case .antigravity: return "Antigravity (.gemini/antigravity)…"
+            case .gemini: return "Gemini (.gemini or VegaTrajectoryArchives)…"
+            case .deepseek: return "DeepSeek Harness (.dsh)…"
+            }
+        }
+
+        var panelTitle: String {
+            switch self {
+            case .claude: return "Choose a Claude Code Data Folder"
+            case .codex: return "Choose a Codex Data Folder"
+            case .antigravity: return "Choose an Antigravity Data Folder"
+            case .gemini: return "Choose a Gemini Data Folder"
+            case .deepseek: return "Choose a DeepSeek Harness Data Folder"
+            }
+        }
+
+        var panelMessage: String {
+            switch self {
+            case .claude: return "Select the .claude folder containing projects."
+            case .codex: return "Select the .codex folder containing sessions or archived_sessions."
+            case .antigravity: return "Select .gemini/antigravity (or a folder containing conversations or brain)."
+            case .gemini: return "Select .gemini (containing tmp or antigravity) or a VegaTrajectoryArchives folder."
+            case .deepseek: return "Select the .dsh folder containing sessions (or a workspace/session folder)."
+            }
+        }
+    }
+
     var body: some View {
         Form {
             Section("Folders to Read") {
                 Toggle("Automatically find agent logs on this Mac", isOn: $locations.autoDiscover)
-                Text("Claude Code and Codex logs are found automatically. Add another .claude or .codex folder for archived or external logs.")
+                Text("Logs from Claude, Codex, Copilot, Antigravity, Gemini and DeepSeek Harness are found automatically on this Mac. Add extra folders for archived or external data roots.")
                     .font(.callout).foregroundStyle(.secondary)
                 rootRows("Claude Code", roots: $locations.claudeRoots)
                 rootRows("Codex", roots: $locations.codexRoots)
+                rootRows("Antigravity", roots: $locations.antigravityRoots)
+                rootRows("Gemini", roots: $locations.geminiRoots)
+                rootRows("DeepSeek", roots: $locations.deepseekRoots)
                 HStack {
-                    Button("Add Claude Folder…") { chooseFolder(claude: true) }
-                    Button("Add Codex Folder…") { chooseFolder(claude: false) }
+                    Menu("Add Agent Folder…") {
+                        ForEach(SourceTarget.allCases) { target in
+                            Button(target.menuLabel) { chooseFolder(for: target) }
+                        }
+                    }
+                    .fixedSize()
                     Spacer()
                     Button("Apply & Reindex") { saveSources() }.disabled(!canSaveSources)
                 }
@@ -140,24 +182,56 @@ struct SourcesSettingsView: View {
         } catch { sourceError = "Could not save source settings: \(error.localizedDescription)" }
     }
 
-    private func chooseFolder(claude: Bool) {
+    private func chooseFolder(for target: SourceTarget) {
         let panel = NSOpenPanel()
-        panel.title = claude ? "Choose a Claude Code Data Folder" : "Choose a Codex Data Folder"
-        panel.message = claude ? "Select the .claude folder containing projects." : "Select the .codex folder containing sessions or archived_sessions."
+        panel.title = target.panelTitle
+        panel.message = target.panelMessage
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.showsHiddenFiles = true
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let folder = panel.url else { return }
-        let names = claude ? ["projects"] : ["sessions", "archived_sessions"]
-        guard names.contains(where: { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path) }) else {
-            sourceError = "This folder has no \(names.joined(separator: " or ")) directory. Choose the agent's data folder."
+        if let problem = validateFolder(folder, for: target) {
+            sourceError = problem
             return
         }
-        if claude { if !locations.claudeRoots.contains(folder.path) { locations.claudeRoots.append(folder.path) } }
-        else { if !locations.codexRoots.contains(folder.path) { locations.codexRoots.append(folder.path) } }
+        let path = folder.path
+        switch target {
+        case .claude: if !locations.claudeRoots.contains(path) { locations.claudeRoots.append(path) }
+        case .codex: if !locations.codexRoots.contains(path) { locations.codexRoots.append(path) }
+        case .antigravity: if !locations.antigravityRoots.contains(path) { locations.antigravityRoots.append(path) }
+        case .gemini: if !locations.geminiRoots.contains(path) { locations.geminiRoots.append(path) }
+        case .deepseek: if !locations.deepseekRoots.contains(path) { locations.deepseekRoots.append(path) }
+        }
         sourceSaved = false
         sourceError = nil
+    }
+
+    private func validateFolder(_ folder: URL, for target: SourceTarget) -> String? {
+        let fm = FileManager.default
+        let base = folder.lastPathComponent
+        func hasSubdir(_ names: [String]) -> Bool {
+            names.contains { fm.fileExists(atPath: folder.appendingPathComponent($0).path) }
+        }
+        let entries = (try? fm.contentsOfDirectory(atPath: folder.path)) ?? []
+        switch target {
+        case .claude:
+            return hasSubdir(["projects"]) ? nil : "This folder has no projects directory. Choose a .claude data folder."
+        case .codex:
+            return hasSubdir(["sessions", "archived_sessions"]) ? nil : "This folder has no sessions or archived_sessions directory. Choose a .codex data folder."
+        case .antigravity:
+            let ok = hasSubdir(["conversations", "brain"]) || base == "conversations" || base == "brain"
+            return ok ? nil : "This folder has no conversations or brain directory. Choose .gemini/antigravity (or antigravity-ide)."
+        case .gemini:
+            let ok = hasSubdir(["tmp", "antigravity", "chats", "VegaTrajectoryArchives"])
+                || ["tmp", "chats", "VegaTrajectoryArchives"].contains(base)
+                || entries.contains { ($0.hasPrefix("session-") && $0.hasSuffix(".json")) || (base == "VegaTrajectoryArchives" && $0.hasSuffix(".json")) }
+            return ok ? nil : "This folder has no Gemini tmp, chats, antigravity, or VegaTrajectoryArchives logs."
+        case .deepseek:
+            let ok = hasSubdir(["sessions", "storages"]) || base == "sessions"
+                || entries.contains { $0.hasPrefix("session") && ($0.hasSuffix(".jsonl") || $0.hasSuffix(".zstd") || $0.hasSuffix(".zst")) }
+            return ok ? nil : "This folder has no DeepSeek Harness sessions directory or session.v*.jsonl.zstd files."
+        }
     }
 
     private func status(_ r: HealthReport) -> String {

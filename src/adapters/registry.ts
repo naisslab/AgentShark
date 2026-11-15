@@ -10,8 +10,21 @@ import { codexStateAdapter } from './codex-state.ts';
 import { copilotAdapter } from './copilot.ts';
 import { copilotCliAdapter } from './copilot-cli.ts';
 import { coworkAuditAdapter } from './cowork-audit.ts';
+import { deepseekAdapter } from './deepseek.ts';
+import { geminiAdapter } from './gemini.ts';
 
-export const ADAPTERS: Adapter[] = [claudeAdapter, claudeDesktopAdapter, coworkAuditAdapter, codexAdapter, codexStateAdapter, copilotAdapter, copilotCliAdapter, antigravityAdapter];
+export const ADAPTERS: Adapter[] = [
+  claudeAdapter,
+  claudeDesktopAdapter,
+  coworkAuditAdapter,
+  codexAdapter,
+  codexStateAdapter,
+  copilotAdapter,
+  copilotCliAdapter,
+  geminiAdapter,
+  antigravityAdapter,
+  deepseekAdapter,
+];
 
 export function adapterByName(name: string): Adapter {
   const adapter = ADAPTERS.find((a) => a.name === name);

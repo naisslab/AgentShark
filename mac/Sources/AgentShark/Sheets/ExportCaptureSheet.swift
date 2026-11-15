@@ -68,7 +68,7 @@ struct ExportCaptureSheet: View {
                     }
                     if scope != .session {
                         LabeledContent("Agents") {
-                            HStack(spacing: 12) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), alignment: .leading)], alignment: .leading, spacing: 6) {
                                 ForEach(AgentKind.known, id: \.self) { agent in
                                     Toggle(agent.label, isOn: Binding(get: { agents.contains(agent) },
                                                                       set: { if $0 { agents.insert(agent) } else { agents.remove(agent) } }))

@@ -1,20 +1,31 @@
-// Google Antigravity conversations (SPEC §4.3, best effort): `~/.gemini/antigravity/conversations/<id>.db`
-// (and `antigravity-ide/`), one SQLite trajectory per conversation in recent versions; older conversations are
-// encrypted `<id>.pb` files that cannot be read. Each `steps` row holds one protobuf step (gemini_coder.Step):
-// the user's input, a planner (model) response, or a tool step that carries its call, timestamps, permission
-// prompt and result. `gen_metadata` rows describe the model calls (model, tokens, time to first token). Field
-// numbers come from the descriptors embedded in Antigravity's language server; there is no published schema.
-// The database is opened immutable (SPEC §2.1), so steps still in its write-ahead log appear only once
-// Antigravity checkpoints it.
+// Google Antigravity conversations (SPEC §4.3): `~/.gemini/antigravity/conversations/<id>.db` (and `antigravity-ide/`),
+// plus `brain/<id>/.system_generated/logs/transcript_full.jsonl` (or `transcript.jsonl`), which recovers conversations
+// whose primary file is an encrypted `.pb` and supplies live uncheckpointed `.db-wal` steps with verified JSONL byte
+// offsets. Also exports shared Cortex trajectory discovery/parsing for Gemini macOS App Code Mode (`source === 21`).
 
-import { glob } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import type { Attrs, EventFlag, EventKind, EventRec, SpanRec, SpanStatus, TokenUsage } from '../model/types.ts';
+import type { AgentKind, AgentPrefix, Attrs, EventFlag, EventKind, EventRec, SpanRec, SpanStatus, TokenUsage } from '../model/types.ts';
 import {
-  type Adapter, type ParseStats, type SourceFile, INDEX_INPUT_MAX_STRING, INDEX_TEXT_MAX, compact, emptyStats, eventId, fileInfo,
-  fromFileUri, oneLine, spanId, summarizeToolInput, toolKind, truncate, tryJson,
+  type Adapter, type DiscoverEnv, type LineInfo, type ParseContext, type ParseStats, type RecordSink, type SourceFile,
+  INDEX_INPUT_MAX_STRING, INDEX_TEXT_MAX, agentRoots, compact, editChanges, emptyStats, eventId, fileInfo,
+  fromFileUri, isoToUs, oneLine, outputTail, readJsonl, spanId, summarizeToolInput, toolKind, truncate, tryJson,
 } from './adapter.ts';
 import { openReadOnly } from './codex-state.ts';
+
+/** CortexTrajectorySource value for the native macOS Gemini.app (`com.google.GeminiMacOS`) Code Mode server. */
+export const CORTEX_SOURCE_GEMINI_APP = 21;
+
+const TRAJECTORY_ENTRYPOINTS: Record<number, string> = {
+  1: 'app', // CASCADE_CLIENT (Antigravity desktop app)
+  12: 'cli', // INTERACTIVE_CASCADE
+  15: 'sdk', // SDK
+  17: 'cli', // CLI
+  19: 'api', // AGENT_API
+  21: 'app', // GEMINI_APP (Gemini macOS app)
+  22: 'ide', // VSCODE / Antigravity IDE
+  23: 'ide', // VISUAL_STUDIO
+};
 
 // CortexStepType values the adapter decodes.
 const USER_INPUT = 14;
@@ -23,8 +34,16 @@ const FINISH = 2;
 const ERROR_MESSAGE = 17;
 const CHECKPOINT = 23;
 const MCP_TOOL = 38;
+const TASK_BOUNDARY = 81;
+const NOTIFY_USER = 82;
+const WAIT = 102;
+const CRITIQUE = 118;
+const FINDINGS = 119;
+const ASK_QUESTION = 138;
 const CONTEXT_STEPS: Record<number, string> = {
-  90: 'ephemeral message', 98: 'conversation history', 99: 'knowledge artifacts', 101: 'system message', 116: 'knowledge insertion', 139: 'directory rules',
+  29: 'memory', 34: 'retrieved memory', 55: 'brain update', 89: 'knowledge generation',
+  90: 'ephemeral message', 98: 'conversation history', 99: 'knowledge artifacts',
+  101: 'system message', 116: 'knowledge insertion', 139: 'directory rules',
 };
 
 // CortexStepStatus values; the others (pending, running, generating, queued, waiting) leave a step open.
@@ -34,7 +53,13 @@ const CLEARED = 5;
 const CANCELED = 6;
 const ERROR = 7;
 const INTERRUPTED = 12;
-const STATUS: Record<number, SpanStatus> = { [DONE]: 'ok', [INVALID]: 'cancelled', [CLEARED]: 'cancelled', [CANCELED]: 'cancelled', [ERROR]: 'error', [INTERRUPTED]: 'interrupted' };
+const STATUS: Record<number, SpanStatus> = {
+  [DONE]: 'ok', [INVALID]: 'cancelled', [CLEARED]: 'cancelled', [CANCELED]: 'cancelled', [ERROR]: 'error', [INTERRUPTED]: 'interrupted',
+};
+
+const TEXT_STATUS: Record<string, SpanStatus> = {
+  DONE: 'ok', INVALID: 'cancelled', CLEARED: 'cancelled', CANCELED: 'cancelled', CANCELLED: 'cancelled', ERROR: 'error', INTERRUPTED: 'interrupted',
+};
 
 // CortexStepSource: an implicit user step is input the harness sent on the user's behalf.
 const USER_IMPLICIT = 3;
@@ -44,249 +69,748 @@ const STOP_REASONS: Record<number, string> = {
 };
 
 // Field numbers of gemini_coder.Step and the exa.cortex_pb / exa.codeium_common_pb messages it holds.
-const STEP = { type: 1, status: 4, metadata: 5, userInput: 19, planner: 20, errorMessage: 24, runCommand: 28, error: 31, requested: 56, shellExec: 127, generic: 140, invokeSubagent: 143, completed: 147 };
+const STEP = {
+  type: 1, status: 4, metadata: 5, userInput: 19, planner: 20, errorMessage: 24, runCommand: 28,
+  error: 31, requested: 56, shellExec: 127, generic: 140, invokeSubagent: 143, completed: 147,
+};
 const META = { created: 1, source: 3, toolCall: 4, completed: 8, usage: 9, finishedGenerating: 7 };
 const CALL = { id: 1, name: 2, args: 3 };
 const USAGE = { input: 2, output: 3, cacheWrite: 4, cacheRead: 5, messageId: 7, thinking: 9 };
 const CHAT = { usage: 4, retries: 14, ttft: 11, streaming: 12, model: 19, display: 21 };
 
-export const antigravityAdapter: Adapter = {
-  name: 'antigravity',
+export interface CortexTarget {
+  agent: AgentKind;
+  prefix: AgentPrefix;
+  protoPrefix: string;
+}
 
-  async discover(env) {
-    if (env.agents && !env.agents.includes('antigravity')) return [];
-    const out: SourceFile[] = [];
-    // The IDE's folder can hold a copy of a conversation the app migrated; the app's copy wins.
-    const seen = new Set<string>();
-    for (const dir of ['antigravity', 'antigravity-ide']) {
-      const base = join(env.home, '.gemini', dir, 'conversations');
-      for await (const rel of glob('*.db', { cwd: base })) {
-        if (seen.has(rel)) continue;
-        seen.add(rel);
-        const f = await fileInfo(join(base, rel), 'antigravity', 'trajectory-db', 'antigravity');
-        if (f) out.push(f);
+const ANTIGRAVITY_TARGET: CortexTarget = { agent: 'antigravity', prefix: 'ag', protoPrefix: 'antigravity' };
+
+/** Group `conversations/<id>.db` and `brain/<id>/.system_generated/logs/transcript*.jsonl` so checkpointing re-parses both. */
+export function trajectoryGroupKey(path: string): string | undefined {
+  const norm = path.replaceAll('\\', '/');
+  const dbMatch = /\/conversations\/([^/]+)\.db$/.exec(norm);
+  if (dbMatch) return dbMatch[1];
+  const trMatch = /\/brain\/([^/]+)\/\.system_generated\/logs\/transcript(?:_full)?\.jsonl$/.exec(norm);
+  if (trMatch) return trMatch[1];
+  return undefined;
+}
+
+/** Normalize a configured root that may point at `<root>`, `<root>/conversations`, or `<root>/brain`. */
+function normalizeCortexBase(root: string): string {
+  const b = basename(root);
+  return b === 'conversations' || b === 'brain' ? dirname(root) : root;
+}
+
+/** Fast read-only peek of `trajectory_meta.source` or `conversation_summaries.source` for a conversation. */
+export function peekTrajectorySource(baseDir: string, conv: string): number | undefined {
+  let db;
+  try {
+    db = openReadOnly(join(baseDir, 'conversations', `${conv}.db`));
+    const row = db.prepare('SELECT source FROM trajectory_meta LIMIT 1').get() as { source?: unknown } | undefined;
+    if (typeof row?.source === 'number') return row.source;
+  } catch {
+    // Missing or unreadable .db; fall back to conversation_summaries.db.
+  } finally {
+    db?.close();
+  }
+  let sumDb;
+  try {
+    sumDb = openReadOnly(join(baseDir, 'conversation_summaries.db'));
+    const row = sumDb.prepare('SELECT source FROM conversation_summaries WHERE conversation_id = ?').get(conv) as { source?: unknown } | undefined;
+    if (typeof row?.source === 'number') return row.source;
+  } catch {
+    // Summaries database absent or without a row.
+  } finally {
+    sumDb?.close();
+  }
+  return undefined;
+}
+
+/** Shared discovery for Cortex stores (`antigravity` takes non-21 trajectories; `gemini` takes `source === 21`). */
+export async function discoverCortexSources(
+  env: DiscoverEnv,
+  roots: string[],
+  targetAgent: 'antigravity' | 'gemini',
+  adapterName: string,
+): Promise<SourceFile[]> {
+  if (env.agents && !env.agents.includes(targetAgent)) return [];
+  const out: SourceFile[] = [];
+  const seenDb = new Set<string>();
+  const seenTranscript = new Set<string>();
+  const bases = [...new Set(roots.map(normalizeCortexBase))];
+
+  for (const base of bases) {
+    const matchesTarget = (conv: string): boolean => {
+      const src = peekTrajectorySource(base, conv);
+      return targetAgent === 'gemini' ? src === CORTEX_SOURCE_GEMINI_APP : src !== CORTEX_SOURCE_GEMINI_APP;
+    };
+
+    const convDir = join(base, 'conversations');
+    const convEntries = await readdir(convDir).catch(() => [] as string[]);
+    for (const name of convEntries) {
+      if (!name.endsWith('.db')) continue;
+      const conv = name.slice(0, -3);
+      if (seenDb.has(conv) || !matchesTarget(conv)) continue;
+      const f = await fileInfo(join(convDir, name), targetAgent, 'trajectory-db', adapterName);
+      if (f) {
+        seenDb.add(conv);
+        out.push(f);
       }
     }
-    return out;
+
+    const brainDir = join(base, 'brain');
+    const brainEntries = await readdir(brainDir, { withFileTypes: true }).catch(() => []);
+    for (const entry of brainEntries) {
+      if (!entry.isDirectory()) continue;
+      const conv = entry.name;
+      if (seenTranscript.has(conv) || !matchesTarget(conv)) continue;
+      const logsDir = join(brainDir, conv, '.system_generated', 'logs');
+      const full = await fileInfo(join(logsDir, 'transcript_full.jsonl'), targetAgent, 'antigravity-transcript', adapterName);
+      const compactLog = full ?? await fileInfo(join(logsDir, 'transcript.jsonl'), targetAgent, 'antigravity-transcript', adapterName);
+      if (compactLog) {
+        seenTranscript.add(conv);
+        out.push(compactLog);
+      }
+    }
+  }
+  return out;
+}
+
+export async function parseCortexSource(ctx: ParseContext, sink: RecordSink, target: CortexTarget = ANTIGRAVITY_TARGET): Promise<ParseStats> {
+  if (ctx.file.kind === 'antigravity-transcript') return parseTranscriptJsonl(ctx, sink, target);
+  return parseTrajectoryDb(ctx, sink, target);
+}
+
+export const antigravityAdapter: Adapter = {
+  name: 'antigravity',
+  groupKey: trajectoryGroupKey,
+
+  async discover(env) {
+    return discoverCortexSources(env, agentRoots(env, 'antigravity'), 'antigravity', 'antigravity');
   },
 
   async parse(ctx, sink) {
-    const { path } = ctx.file;
-    const stats: ParseStats = { ...emptyStats(), parsedBytes: ctx.file.size, dialect: 'trajectory-db' };
-    const metadataErrors: string[] = [];
-    const metadata = (data: Uint8Array | null | undefined, label: string): Pb => {
-      try {
-        return pb(data);
-      } catch (e) {
-        stats.malformed++;
-        metadataErrors.push(`${label}: ${(e as Error).message}`);
-        return new Map();
-      }
-    };
-    const db = openReadOnly(path);
-    let rows: { idx: number; step_type: number; status: number; step_format: number; step_payload: Uint8Array | null; metadata: Uint8Array | null; error_details: Uint8Array | null }[];
-    let traj: { trajectory_id?: string; cascade_id?: string; trajectory_type?: number } | undefined;
-    let tmeta: Pb;
-    let gens: Pb[];
+    return parseCortexSource(ctx, sink, ANTIGRAVITY_TARGET);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// SQLite trajectory-db parser (`conversations/<id>.db`)
+
+async function parseTrajectoryDb(ctx: ParseContext, sink: RecordSink, target: CortexTarget): Promise<ParseStats> {
+  const { path } = ctx.file;
+  const stats: ParseStats = { ...emptyStats(), parsedBytes: ctx.file.size, dialect: 'trajectory-db' };
+  const metadataErrors: string[] = [];
+  const metadata = (data: Uint8Array | null | undefined, label: string): Pb => {
     try {
-      const tables = new Set((db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((t) => t.name));
-      if (!tables.has('steps')) {
-        stats.skipped = 1;
-        return stats;
-      }
-      const version = (db.prepare('PRAGMA user_version').get() as { user_version?: number } | undefined)?.user_version;
-      if (version) stats.dialect = `trajectory-db v${version}`;
-      rows = db.prepare('SELECT idx, step_type, status, step_format, step_payload, metadata, error_details FROM steps ORDER BY idx').all() as typeof rows;
-      traj = tables.has('trajectory_meta') ? db.prepare('SELECT trajectory_id, cascade_id, trajectory_type FROM trajectory_meta LIMIT 1').get() as typeof traj : undefined;
-      const blob = tables.has('trajectory_metadata_blob') ? db.prepare("SELECT data FROM trajectory_metadata_blob WHERE id = 'main'").get() as { data?: Uint8Array } | undefined : undefined;
-      tmeta = metadata(blob?.data, 'trajectory metadata');
-      gens = tables.has('gen_metadata') ? (db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx').all() as { idx: number; data: Uint8Array | null }[]).map((g) => metadata(g.data, `generator ${g.idx}`)) : [];
-    } finally {
-      db.close();
+      return pb(data);
+    } catch (e) {
+      stats.malformed++;
+      metadataErrors.push(`${label}: ${(e as Error).message}`);
+      return new Map();
     }
-    stats.lines = rows.length;
-    if (!rows.length) {
+  };
+  const db = openReadOnly(path);
+  let rows: { idx: number; step_type: number; status: number; step_format: number; step_payload: Uint8Array | null; metadata: Uint8Array | null; error_details: Uint8Array | null }[];
+  let traj: { trajectory_id?: string; cascade_id?: string; trajectory_type?: number; source?: number } | undefined;
+  let tmeta: Pb;
+  let gens: Pb[];
+  try {
+    const tables = new Set((db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((t) => t.name));
+    if (!tables.has('steps')) {
       stats.skipped = 1;
       return stats;
     }
+    const version = (db.prepare('PRAGMA user_version').get() as { user_version?: number } | undefined)?.user_version;
+    if (version) stats.dialect = `trajectory-db v${version}`;
+    rows = db.prepare('SELECT idx, step_type, status, step_format, step_payload, metadata, error_details FROM steps ORDER BY idx').all() as typeof rows;
+    if (tables.has('trajectory_meta')) {
+      const cols = new Set((db.prepare('PRAGMA table_info(trajectory_meta)').all() as { name: string }[]).map((c) => c.name));
+      const srcCol = cols.has('source') ? ', source' : '';
+      traj = db.prepare(`SELECT trajectory_id, cascade_id, trajectory_type${srcCol} FROM trajectory_meta LIMIT 1`).get() as typeof traj;
+    }
+    const blob = tables.has('trajectory_metadata_blob') ? db.prepare("SELECT data FROM trajectory_metadata_blob WHERE id = 'main'").get() as { data?: Uint8Array } | undefined : undefined;
+    tmeta = metadata(blob?.data, 'trajectory metadata');
+    gens = tables.has('gen_metadata') ? (db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx').all() as { idx: number; data: Uint8Array | null }[]).map((g) => metadata(g.data, `generator ${g.idx}`)) : [];
+  } finally {
+    db.close();
+  }
+  stats.lines = rows.length;
+  if (!rows.length) {
+    stats.skipped = 1;
+    return stats;
+  }
 
-    const conv = traj?.cascade_id || basename(path, '.db');
-    const session = `ag:${conv}`;
-    for (const message of metadataErrors) sink.emit({ rec: 'expert', session, severity: 'warn', group: 'malformed', message });
-    const summary = await readSummary(join(dirname(dirname(path)), 'conversation_summaries.db'), conv);
-    // Each model call's generator metadata names the steps it produced; the planner response among them is the call.
-    const chatByStep = new Map<number, Pb>();
-    for (const g of gens) for (const i of ints(g, 2)) chatByStep.set(i, sub(g, 1));
+  const baseDir = dirname(dirname(path));
+  const conv = traj?.cascade_id || basename(path, '.db');
+  const session = `${target.prefix}:${conv}`;
+  for (const message of metadataErrors) sink.emit({ rec: 'expert', session, severity: 'warn', group: 'malformed', message });
+  const summary = await readSummary(join(baseDir, 'conversation_summaries.db'), conv);
+  const chatByStep = new Map<number, Pb>();
+  for (const g of gens) for (const i of ints(g, 2)) chatByStep.set(i, sub(g, 1));
 
-    const events: EventRec[] = [];
-    const spans: SpanRec[] = [];
-    const models = new Set<string>();
-    const undecoded = new Set<number>();
-    let turn: SpanRec | undefined;
-    let turnIndex = 0;
-    let lastTs = 0;
+  const events: EventRec[] = [];
+  const spans: SpanRec[] = [];
+  const models = new Set<string>();
+  const undecoded = new Set<number>();
+  let turn: SpanRec | undefined;
+  let turnIndex = 0;
+  let lastTs = 0;
 
-    for (const row of rows) {
-      let step: Pb;
-      let meta: Pb;
-      let errorText: string | undefined;
-      try {
-        if (row.step_format !== 0) throw new Error(`step format ${row.step_format}`);
-        step = pb(row.step_payload);
-        meta = step.has(STEP.metadata) ? sub(step, STEP.metadata) : pb(row.metadata);
-        errorText = errorMessage(row.error_details ? pb(row.error_details) : sub(step, STEP.error));
-      } catch (e) {
-        stats.malformed++;
-        sink.emit({ rec: 'expert', session, severity: 'warn', group: 'malformed', message: `step ${row.idx}: ${(e as Error).message}` });
-        continue;
+  for (const row of rows) {
+    let step: Pb;
+    let meta: Pb;
+    let errorText: string | undefined;
+    try {
+      if (row.step_format !== 0) throw new Error(`step format ${row.step_format}`);
+      step = pb(row.step_payload);
+      meta = step.has(STEP.metadata) ? sub(step, STEP.metadata) : pb(row.metadata);
+      errorText = errorMessage(row.error_details ? pb(row.error_details) : sub(step, STEP.error));
+    } catch (e) {
+      stats.malformed++;
+      sink.emit({ rec: 'expert', session, severity: 'warn', group: 'malformed', message: `step ${row.idx}: ${(e as Error).message}` });
+      continue;
+    }
+    const type = int(step, STEP.type) ?? row.step_type;
+    const status = int(step, STEP.status) ?? row.status;
+    const created = time(meta, META.created);
+    const completed = time(meta, META.completed);
+    const call = sub(meta, META.toolCall);
+    let block = 0;
+    const emit = (kind: EventKind, actor: EventRec['actor'], summaryText: string, attrs: Attrs, at = created, flags?: EventFlag[]) => {
+      const ts = at ?? lastTs;
+      const ev: EventRec = {
+        rec: 'event', id: eventId(ctx.sourceId, row.idx + 1, block), session, ts, tsSrc: at !== undefined ? 'logged' : lastTs ? 'inherited' : 'none',
+        seq: events.length, kind, proto: `${target.protoPrefix}/${type}`, actor, summary: summaryText, attrs, native: block === 0 ? nativeOf(step, meta) : undefined,
+        raw: { source: ctx.sourceId, line: 0, offset: 0, length: 0, block: row.idx }, flags,
+      };
+      block++;
+      if (at !== undefined) lastTs = Math.max(lastTs, at);
+      if (turn) {
+        ev.turn = turn.id;
+        ev.span = turn.id;
+        turn.end = Math.max(turn.end ?? turn.start, ev.ts);
+        turn.lastEvent = ev.id;
+        if (flags?.includes('error') && kind.startsWith('llm.') && turn.status === 'ok') turn.status = 'error';
       }
-      const type = int(step, STEP.type) ?? row.step_type;
-      const status = int(step, STEP.status) ?? row.status;
-      const created = time(meta, META.created);
-      const completed = time(meta, META.completed);
-      const call = sub(meta, META.toolCall);
+      events.push(ev);
+      return ev;
+    };
+
+    if (type === USER_INPUT) {
+      const input = sub(step, STEP.userInput);
+      const rawText = str(input, 2) ?? str(input, 1) ?? list(input, 3).map((it) => str(it, 1)).filter(Boolean).join('\n');
+      const clean = stripUserRequestTags(rawText);
+      const implicit = int(meta, META.source) === USER_IMPLICIT;
+      if (!implicit) turn = undefined;
+      const ev = emit(implicit ? 'user.inject' : 'user.prompt', 'user', oneLine(clean), {
+        text: truncate(clean, INDEX_TEXT_MAX), text_len: clean.length,
+        antigravity: { queued: int(input, 6) === 1 || undefined, images: (input.get(5)?.length ?? 0) + (input.get(9)?.length ?? 0) || undefined },
+      });
+      if (!implicit) {
+        turn = {
+          rec: 'span', id: spanId(session, 'turn', row.idx), session, kind: 'turn', name: oneLine(clean, 80), start: ev.ts, durSrc: 'derived:ts-gap', status: 'ok',
+          firstEvent: ev.id, lastEvent: ev.id, attrs: { turn: { index: turnIndex } },
+        };
+        ev.turn = ev.span = turn.id;
+        ev.attrs.turn = { index: turnIndex++ };
+        spans.push(turn);
+      }
+      continue;
+    }
+
+    if (type === PLANNER_RESPONSE) {
+      const plan = sub(step, STEP.planner);
+      const chat = chatByStep.get(row.idx) ?? new Map();
+      const model = str(chat, CHAT.model) ?? str(chat, CHAT.display);
+      if (model) models.add(model);
+      const usage = chat.has(CHAT.usage) ? sub(chat, CHAT.usage) : sub(meta, META.usage);
+      const tokens = tokenUsage(usage);
+      const ttft = duration(chat, CHAT.ttft);
+      const streaming = duration(chat, CHAT.streaming);
+      const finished = time(meta, META.finishedGenerating);
+      const logged = ttft !== undefined && streaming !== undefined ? ttft + streaming : undefined;
+      const dur = logged ?? (finished !== undefined && created !== undefined && finished >= created ? finished - created : undefined);
+      const failed = status === ERROR || errorText !== undefined;
+      const stop = int(plan, 12);
+      const thinking = str(plan, 3) ?? str(plan, 16);
+      const text = str(plan, 8) ?? str(plan, 1) ?? '';
+      const tools = list(plan, 7).map((c) => str(c, CALL.name)).filter((n): n is string => !!n);
+      const llm = {
+        model, display: str(chat, CHAT.display), message_id: str(plan, 6) ?? str(usage, USAGE.messageId),
+        stop_reason: stop !== undefined ? STOP_REASONS[stop] ?? `stop_reason_${stop}` : undefined,
+        ttft_ms: ttft !== undefined ? ttft / 1000 : undefined, latency_ms: dur !== undefined ? dur / 1000 : undefined,
+        retries: int(chat, CHAT.retries) || undefined,
+      };
+      const end = created !== undefined && dur !== undefined ? created + dur : created;
+      const first = thinking ? emit('llm.thinking', 'assistant', oneLine(thinking), { text: truncate(thinking, INDEX_TEXT_MAX), text_len: thinking.length }, end) : undefined;
+      const ev = emit('llm.text', 'assistant', text ? oneLine(text) : words('→', tools.join(', ')), {
+        text: truncate(text, INDEX_TEXT_MAX), text_len: text.length, llm, tokens, tool_requests: tools.length || undefined,
+        error: failed ? { message: truncate(errorText, 1024) } : undefined,
+      }, end, failed ? ['error'] : undefined);
+      if (failed) sink.emit({ rec: 'expert', session, event: ev.id, severity: 'error', group: 'api-error', message: `${target.agent} model call failed: ${oneLine(errorText ?? 'step status error', 200)}` });
+      const start = created ?? ev.ts;
+      spans.push({
+        rec: 'span', id: spanId(session, 'llm', row.idx), session, kind: 'llm', name: model ?? target.agent, parent: turn?.id, start,
+        end: dur !== undefined ? start + dur : undefined, dur,
+        durSrc: logged !== undefined ? 'logged:chat_model.time_to_first_token+streaming_duration' : dur !== undefined ? 'logged:metadata.finished_generating_at' : 'unknown',
+        status: failed ? 'error' : STATUS[status] ?? 'open', firstEvent: (first ?? ev).id, lastEvent: ev.id, attrs: { llm, tokens },
+      });
+      for (const e of first ? [first, ev] : [ev]) e.span = spanId(session, 'llm', row.idx);
+      ev.dur = dur;
+      continue;
+    }
+
+    const name = str(call, CALL.name);
+    if (name) {
+      toolStep(row.idx, type, status, step, call, name, created, completed, errorText, emit, session, target.prefix, spans, turn);
+      continue;
+    }
+
+    const failed = status === ERROR ? ['error' as const] : undefined;
+    if (type === ERROR_MESSAGE) {
+      const text = errorMessage(sub(sub(step, STEP.errorMessage), 3)) ?? errorText ?? '';
+      const ev = emit('llm.error', 'harness', words('error', oneLine(text, 140)), { error: { message: truncate(text, 1024) } }, created, ['error']);
+      sink.emit({ rec: 'expert', session, event: ev.id, severity: 'error', group: 'api-error', message: `${target.agent} error: ${oneLine(text, 200)}` });
+    } else if (type === CHECKPOINT) {
+      emit('context.compaction', 'harness', 'checkpoint', { context: { type: 'checkpoint' } }, created, failed);
+    } else if (type === FINISH) {
+      emit('turn.end', 'harness', 'finish', {}, created, failed);
+    } else if (type === TASK_BOUNDARY) {
+      emit('harness.status', 'assistant', 'task boundary', {}, created, failed);
+    } else if (type === NOTIFY_USER) {
+      emit('agent.message', 'assistant', 'notify user', {}, created, failed);
+    } else if (type === WAIT) {
+      emit('harness.status', 'harness', 'wait', {}, created, failed);
+    } else if (type === CRITIQUE || type === FINDINGS) {
+      emit('llm.thinking', 'assistant', type === CRITIQUE ? 'critique' : 'findings', {}, created, failed);
+    } else if (type === ASK_QUESTION) {
+      emit('permission.request', 'assistant', 'ask question', {}, created, failed);
+    } else if (CONTEXT_STEPS[type]) {
+      emit('context.attachment', 'harness', CONTEXT_STEPS[type], { context: { type: CONTEXT_STEPS[type] } }, created, failed);
+    } else {
+      stats.unknown++;
+      const ev = emit('raw.unknown', 'harness', `step type ${type}`, {}, created, failed);
+      if (!undecoded.has(type)) {
+        undecoded.add(type);
+        sink.emit({ rec: 'expert', session, event: ev.id, severity: 'note', group: 'undecoded', message: `Unknown ${target.agent} step type ${type}` });
+      }
+    }
+  }
+  if (!events.length) {
+    stats.skipped = 1;
+    return stats;
+  }
+
+  const ws = list(tmeta, 1)[0];
+  const cwd = fromFileUri(str(ws, 1)) ?? fromFileUri(strs(tmeta, 7)[0]) ?? fromFileUri(summary?.workspace);
+  const root = fromFileUri(str(ws, 2)) ?? cwd;
+  const parent = str(tmeta, 5) ?? summary?.parent;
+  const srcEnum = traj?.source ?? summary?.source;
+  const entrypoint = (srcEnum !== undefined ? TRAJECTORY_ENTRYPOINTS[srcEnum] : undefined)
+    ?? (basename(baseDir) === 'antigravity-ide' ? 'ide' : 'app');
+  sink.emit({
+    rec: 'session',
+    id: session,
+    agent: target.agent,
+    nativeId: conv,
+    role: parent ? 'subagent' : 'main',
+    parentId: parent ? `${target.prefix}:${parent}` : undefined,
+    title: summary?.title,
+    cwd,
+    project: root ? basename(root) : undefined,
+    git: str(ws, 4) ? { branch: str(ws, 4) } : undefined,
+    models: [...models],
+    entrypoint,
+    createdTs: time(tmeta, 2),
+    meta: { trajectoryId: traj?.trajectory_id, trajectoryType: traj?.trajectory_type, trajectorySource: srcEnum, projectId: str(tmeta, 18), status: summary?.status },
+  });
+  for (const ev of events) sink.emit(ev);
+  for (const sp of spans) {
+    if (sp.kind === 'turn' && sp.end !== undefined) sp.dur = sp.end - sp.start;
+    sink.emit(sp);
+  }
+  return stats;
+}
+
+// ---------------------------------------------------------------------------
+// JSONL transcript parser (`brain/<id>/.system_generated/logs/transcript_full.jsonl`)
+
+interface PendingCall {
+  callId: string;
+  name: string;
+  kind: ReturnType<typeof toolKind>;
+  input: unknown;
+  inputSummary: string;
+  command?: string;
+  callEv: EventRec;
+  turnId?: string;
+}
+
+function maxCheckpointedStepIndex(dbPath: string): number {
+  let db;
+  try {
+    db = openReadOnly(dbPath);
+    const row = db.prepare('SELECT count(*) AS n, max(idx) AS maxIdx FROM steps WHERE step_format = 0 AND length(step_payload) > 0').get() as { n?: number; maxIdx?: number | null } | undefined;
+    return row && (row.n ?? 0) > 0 && typeof row.maxIdx === 'number' ? row.maxIdx : -1;
+  } catch {
+    return -1;
+  } finally {
+    db?.close();
+  }
+}
+
+function peekTrajectoryWorkspace(dbPath: string): { cwd?: string; root?: string; branch?: string; parent?: string } | undefined {
+  let db;
+  try {
+    db = openReadOnly(dbPath);
+    const row = db.prepare("SELECT data FROM trajectory_metadata_blob WHERE id = 'main'").get() as { data?: Uint8Array } | undefined;
+    if (!row?.data?.length) return undefined;
+    const tmeta = pb(row.data);
+    const ws = list(tmeta, 1)[0];
+    const cwd = fromFileUri(str(ws, 1)) ?? fromFileUri(strs(tmeta, 7)[0]);
+    const root = fromFileUri(str(ws, 2)) ?? cwd;
+    return { cwd, root, branch: str(ws, 4), parent: str(tmeta, 5) };
+  } catch {
+    return undefined;
+  } finally {
+    db?.close();
+  }
+}
+
+async function parseTranscriptJsonl(ctx: ParseContext, sink: RecordSink, target: CortexTarget): Promise<ParseStats> {
+  const { path } = ctx.file;
+  const conv = trajectoryGroupKey(path) ?? basename(dirname(dirname(dirname(path))));
+  // <base>/brain/<conv>/.system_generated/logs/transcript_full.jsonl → <base> is 4 levels up.
+  const baseDir = dirname(dirname(dirname(dirname(dirname(path)))));
+  const maxDbIdx = maxCheckpointedStepIndex(join(baseDir, 'conversations', `${conv}.db`));
+  const session = `${target.prefix}:${conv}`;
+  const stats: ParseStats = { ...emptyStats(), dialect: basename(path) === 'transcript_full.jsonl' ? 'transcript-full-jsonl' : 'transcript-jsonl' };
+
+  const events: EventRec[] = [];
+  const spans: SpanRec[] = [];
+  const pendingCalls: PendingCall[] = [];
+  const seqOffset = maxDbIdx >= 0 ? 1_000_000 : 0;
+  let currentTurnId: string | undefined;
+  let currentTurnSpan: SpanRec | undefined;
+  let turnIndex = 0;
+  let firstPrompt: string | undefined;
+  let firstTs: number | undefined;
+  let lastTs = 0;
+
+  const readRes = await readJsonl(
+    path,
+    (rec: Record<string, any>, info: LineInfo) => {
+      if (!rec || typeof rec !== 'object') return;
+      const stepIdx = typeof rec.step_index === 'number' ? rec.step_index : info.line - 1;
+      const createdTs = isoToUs(rec.created_at);
+      if (createdTs !== undefined) {
+        if (firstTs === undefined) firstTs = createdTs;
+        lastTs = Math.max(lastTs, createdTs);
+      }
+      const stepType = typeof rec.type === 'string' ? rec.type : 'UNKNOWN';
+      const stepSrc = typeof rec.source === 'string' ? rec.source : '';
+
+      // Track open turn index even across checkpointed lines so trailing WAL steps bind to the right turn span.
+      if (stepType === 'USER_INPUT' && stepSrc !== 'USER_IMPLICIT') {
+        currentTurnId = spanId(session, 'turn', stepIdx);
+        if (stepIdx <= maxDbIdx) {
+          turnIndex++;
+          currentTurnSpan = undefined;
+        }
+      }
+
+      if (stepIdx <= maxDbIdx) {
+        // If the last checkpointed step was a PLANNER_RESPONSE whose GENERIC tool results are still in WAL,
+        // remember its tool calls without re-emitting the checkpointed step itself.
+        if (stepIdx === maxDbIdx && stepType === 'PLANNER_RESPONSE' && Array.isArray(rec.tool_calls)) {
+          rec.tool_calls.forEach((tc: any, i: number) => {
+            const name = typeof tc?.name === 'string' ? tc.name : 'tool';
+            const input = camelKeys(tc?.args ?? {});
+            const kind = toolKind(name);
+            const inputSummary = summarizeToolInput(name, input);
+            const callId = `step-${stepIdx}-call-${i}`;
+            // Create a synthetic reference to the checkpointed step without emitting a duplicate call event.
+            const fakeEv: EventRec = {
+              rec: 'event', id: `${ctx.sourceId}:db:${stepIdx}:${i}`, session, ts: createdTs ?? lastTs, tsSrc: 'logged',
+              seq: 0, kind: 'tool.call', proto: `${target.protoPrefix}/PLANNER_RESPONSE`, actor: 'assistant', summary: name, attrs: {},
+              raw: { source: ctx.sourceId, line: info.line, offset: info.offset, length: info.length },
+            };
+            pendingCalls.push({ callId, name, kind, input, inputSummary, command: kind === 'shell' ? strField(input, 'commandLine', 'command') : undefined, callEv: fakeEv, turnId: currentTurnId });
+          });
+        }
+        stats.skipped++;
+        return;
+      }
+
       let block = 0;
-      const emit = (kind: EventKind, actor: EventRec['actor'], summaryText: string, attrs: Attrs, at = created, flags?: EventFlag[]) => {
+      const emit = (kind: EventKind, actor: EventRec['actor'], summaryText: string, attrs: Attrs, at = createdTs, flags?: EventFlag[]): EventRec => {
         const ts = at ?? lastTs;
         const ev: EventRec = {
-          rec: 'event', id: eventId(ctx.sourceId, row.idx + 1, block), session, ts, tsSrc: at !== undefined ? 'logged' : lastTs ? 'inherited' : 'none',
-          seq: events.length, kind, proto: `antigravity/${type}`, actor, summary: summaryText, attrs, native: block === 0 ? nativeOf(step, meta) : undefined,
-          raw: { source: ctx.sourceId, line: 0, offset: 0, length: 0, block: row.idx }, flags,
+          rec: 'event',
+          id: eventId(ctx.sourceId, info.line, block === 0 ? undefined : block),
+          session,
+          ts,
+          tsSrc: at !== undefined ? 'logged' : lastTs ? 'inherited' : 'none',
+          seq: seqOffset + events.length,
+          kind,
+          proto: `${target.protoPrefix}/${stepType}`,
+          actor,
+          summary: summaryText,
+          span: currentTurnId,
+          turn: currentTurnId,
+          attrs,
+          native: block === 0 ? compact({ step_index: stepIdx, type: stepType, source: stepSrc, status: rec.status }) : undefined,
+          raw: { source: ctx.sourceId, line: info.line, offset: info.offset, length: info.length, ...(block > 0 ? { block } : {}) },
+          flags,
         };
         block++;
         if (at !== undefined) lastTs = Math.max(lastTs, at);
-        if (turn) {
-          ev.turn = turn.id;
-          ev.span = turn.id;
-          turn.end = Math.max(turn.end ?? turn.start, ev.ts);
-          turn.lastEvent = ev.id;
-          // A failed model call fails the turn; a failed tool is the model's to handle.
-          if (flags?.includes('error') && kind.startsWith('llm.') && turn.status === 'ok') turn.status = 'error';
+        if (currentTurnSpan) {
+          currentTurnSpan.end = Math.max(currentTurnSpan.end ?? currentTurnSpan.start, ev.ts);
+          currentTurnSpan.lastEvent = ev.id;
+          if (flags?.includes('error') && kind.startsWith('llm.') && currentTurnSpan.status === 'ok') currentTurnSpan.status = 'error';
         }
         events.push(ev);
         return ev;
       };
 
-      if (type === USER_INPUT) {
-        const input = sub(step, STEP.userInput);
-        const text = str(input, 2) ?? str(input, 1) ?? list(input, 3).map((it) => str(it, 1)).filter(Boolean).join('\n');
-        const implicit = int(meta, META.source) === USER_IMPLICIT;
-        if (!implicit) turn = undefined;
-        const ev = emit(implicit ? 'user.inject' : 'user.prompt', 'user', oneLine(text), {
-          text: truncate(text, INDEX_TEXT_MAX), text_len: text.length, antigravity: { queued: int(input, 6) === 1 || undefined, images: (input.get(5)?.length ?? 0) + (input.get(9)?.length ?? 0) || undefined },
+      if (stepType === 'USER_INPUT') {
+        const rawContent = typeof rec.content === 'string' ? rec.content : '';
+        const clean = stripUserRequestTags(rawContent);
+        if (!firstPrompt && clean) firstPrompt = oneLine(clean, 120);
+        const implicit = stepSrc === 'USER_IMPLICIT';
+        const ev = emit(implicit ? 'user.inject' : 'user.prompt', 'user', oneLine(clean), {
+          text: truncate(clean, INDEX_TEXT_MAX), text_len: clean.length,
+          antigravity: { media: Array.isArray(rec.media) && rec.media.length ? rec.media.length : undefined },
         });
         if (!implicit) {
-          turn = {
-            rec: 'span', id: spanId(session, 'turn', row.idx), session, kind: 'turn', name: oneLine(text, 80), start: ev.ts, durSrc: 'derived:ts-gap', status: 'ok',
-            firstEvent: ev.id, lastEvent: ev.id, attrs: { turn: { index: turnIndex } },
+          currentTurnId = spanId(session, 'turn', stepIdx);
+          currentTurnSpan = {
+            rec: 'span', id: currentTurnId, session, kind: 'turn', name: oneLine(clean, 80), start: ev.ts,
+            durSrc: 'derived:ts-gap', status: 'ok', firstEvent: ev.id, lastEvent: ev.id, attrs: { turn: { index: turnIndex } },
           };
-          ev.turn = ev.span = turn.id;
+          ev.turn = ev.span = currentTurnId;
           ev.attrs.turn = { index: turnIndex++ };
-          spans.push(turn);
+          spans.push(currentTurnSpan);
         }
-        continue;
+        return;
       }
 
-      if (type === PLANNER_RESPONSE) {
-        const plan = sub(step, STEP.planner);
-        const chat = chatByStep.get(row.idx) ?? new Map();
-        const model = str(chat, CHAT.model) ?? str(chat, CHAT.display);
-        if (model) models.add(model);
-        const usage = chat.has(CHAT.usage) ? sub(chat, CHAT.usage) : sub(meta, META.usage);
-        const tokens = tokenUsage(usage);
-        const ttft = duration(chat, CHAT.ttft);
-        const streaming = duration(chat, CHAT.streaming);
-        const finished = time(meta, META.finishedGenerating);
-        const logged = ttft !== undefined && streaming !== undefined ? ttft + streaming : undefined;
-        const dur = logged ?? (finished !== undefined && created !== undefined && finished >= created ? finished - created : undefined);
-        const failed = status === ERROR || errorText !== undefined;
-        const stop = int(plan, 12);
-        const thinking = str(plan, 3) ?? str(plan, 16);
-        const text = str(plan, 8) ?? str(plan, 1) ?? '';
-        const tools = list(plan, 7).map((c) => str(c, CALL.name)).filter((n): n is string => !!n);
-        const llm = {
-          model, display: str(chat, CHAT.display), message_id: str(plan, 6) ?? str(usage, USAGE.messageId), stop_reason: stop !== undefined ? STOP_REASONS[stop] ?? `stop_reason_${stop}` : undefined,
-          ttft_ms: ttft !== undefined ? ttft / 1000 : undefined, latency_ms: dur !== undefined ? dur / 1000 : undefined, retries: int(chat, CHAT.retries) || undefined,
-        };
-        // The response is complete when generation ends, so its records carry that time.
-        const end = created !== undefined && dur !== undefined ? created + dur : created;
-        const first = thinking ? emit('llm.thinking', 'assistant', oneLine(thinking), { text: truncate(thinking, INDEX_TEXT_MAX), text_len: thinking.length }, end) : undefined;
-        const ev = emit('llm.text', 'assistant', text ? oneLine(text) : words('→', tools.join(', ')), {
-          text: truncate(text, INDEX_TEXT_MAX), text_len: text.length, llm, tokens, tool_requests: tools.length || undefined,
-          error: failed ? { message: truncate(errorText, 1024) } : undefined,
-        }, end, failed ? ['error'] : undefined);
-        if (failed) sink.emit({ rec: 'expert', session, event: ev.id, severity: 'error', group: 'api-error', message: `Antigravity model call failed: ${oneLine(errorText ?? 'step status error', 200)}` });
-        const start = created ?? ev.ts;
+      if (stepType === 'PLANNER_RESPONSE') {
+        const thinking = typeof rec.thinking === 'string' && rec.thinking ? rec.thinking : undefined;
+        const text = typeof rec.content === 'string' ? rec.content : '';
+        const calls: any[] = Array.isArray(rec.tool_calls) ? rec.tool_calls : [];
+        const uncached = typeof rec.input_tokens === 'number' ? rec.input_tokens : undefined;
+        const cacheRead = typeof rec.cache_read_tokens === 'number' ? rec.cache_read_tokens : undefined;
+        const output = typeof rec.output_tokens === 'number' ? rec.output_tokens : undefined;
+        const tokens: TokenUsage | undefined = uncached !== undefined || cacheRead !== undefined || output !== undefined
+          ? { input: (uncached ?? 0) + (cacheRead ?? 0), uncached, cache_read: cacheRead, output }
+          : undefined;
+        const failed = rec.status === 'ERROR' || typeof rec.error === 'string';
+        const toolNames = calls.map((c) => c?.name).filter((n): n is string => typeof n === 'string' && !!n);
+
+        const first = thinking ? emit('llm.thinking', 'assistant', oneLine(thinking), { text: truncate(thinking, INDEX_TEXT_MAX), text_len: thinking.length }) : undefined;
+        const ev = emit('llm.text', 'assistant', text ? oneLine(text) : words('→', toolNames.join(', ')), {
+          text: truncate(text, INDEX_TEXT_MAX), text_len: text.length,
+          tokens,
+          tool_requests: toolNames.length || undefined,
+          error: failed ? { message: truncate(typeof rec.error === 'string' ? rec.error : 'step status ERROR', 1024) } : undefined,
+        }, createdTs, failed ? ['error'] : undefined);
+        const llmSpanId = spanId(session, 'llm', stepIdx);
         spans.push({
-          rec: 'span', id: spanId(session, 'llm', row.idx), session, kind: 'llm', name: model ?? 'antigravity', parent: turn?.id, start,
-          end: dur !== undefined ? start + dur : undefined, dur,
-          durSrc: logged !== undefined ? 'logged:chat_model.time_to_first_token+streaming_duration' : dur !== undefined ? 'logged:metadata.finished_generating_at' : 'unknown',
-          status: failed ? 'error' : STATUS[status] ?? 'open', firstEvent: (first ?? ev).id, lastEvent: ev.id, attrs: { llm, tokens },
+          rec: 'span', id: llmSpanId, session, kind: 'llm', name: target.agent, parent: currentTurnId,
+          start: ev.ts, durSrc: 'unknown', status: failed ? 'error' : TEXT_STATUS[String(rec.status ?? '')] ?? 'open',
+          firstEvent: (first ?? ev).id, lastEvent: ev.id, attrs: { tokens },
         });
-        for (const e of first ? [first, ev] : [ev]) e.span = spanId(session, 'llm', row.idx);
-        ev.dur = dur;
-        continue;
+        for (const e of first ? [first, ev] : [ev]) e.span = llmSpanId;
+
+        calls.forEach((tc, i) => {
+          const name = typeof tc?.name === 'string' && tc.name ? tc.name : 'tool';
+          const input = camelKeys(tc?.args ?? tc?.arguments ?? {});
+          const kind = toolKind(name);
+          const inputSummary = summarizeToolInput(name, input);
+          const command = kind === 'shell' ? strField(input, 'commandLine', 'command') : undefined;
+          const callId = `step-${stepIdx}-call-${i}`;
+          const changes = editChanges(name, input);
+          const callEv = emit('tool.call', 'assistant', `${name}  ${inputSummary}`, {
+            tool: { name, call_id: callId, kind, command, input: compact(input, { maxString: INDEX_INPUT_MAX_STRING }), input_summary: inputSummary },
+            ...(changes.length ? { change: { files: changes } } : {}),
+          });
+          pendingCalls.push({ callId, name, kind, input, inputSummary, command, callEv, turnId: currentTurnId });
+        });
+        return;
       }
 
-      const name = str(call, CALL.name);
-      if (name) {
-        toolStep(row.idx, type, status, step, call, name, created, completed, errorText, emit, session, spans, turn);
-        continue;
-      }
-
-      const failed = status === ERROR ? ['error' as const] : undefined;
-      if (type === ERROR_MESSAGE) {
-        const text = errorMessage(sub(sub(step, STEP.errorMessage), 3)) ?? errorText ?? '';
-        const ev = emit('llm.error', 'harness', words('error', oneLine(text, 140)), { error: { message: truncate(text, 1024) } }, created, ['error']);
-        sink.emit({ rec: 'expert', session, event: ev.id, severity: 'error', group: 'api-error', message: `Antigravity error: ${oneLine(text, 200)}` });
-      } else if (type === CHECKPOINT) {
-        emit('context.compaction', 'harness', 'checkpoint', { context: { type: 'checkpoint' } }, created, failed);
-      } else if (type === FINISH) {
-        emit('turn.end', 'harness', 'finish', {}, created, failed);
-      } else if (CONTEXT_STEPS[type]) {
-        emit('context.attachment', 'harness', CONTEXT_STEPS[type], { context: { type: CONTEXT_STEPS[type] } }, created, failed);
-      } else {
-        stats.unknown++;
-        const ev = emit('raw.unknown', 'harness', `step type ${type}`, {}, created, failed);
-        if (!undecoded.has(type)) {
-          undecoded.add(type);
-          sink.emit({ rec: 'expert', session, event: ev.id, severity: 'note', group: 'undecoded', message: `Unknown Antigravity step type ${type}` });
+      if (stepType === 'GENERIC' || stepType === 'RUN_COMMAND' || stepType === 'SHELL_EXEC' || stepType === 'MCP_TOOL') {
+        const rawOut = typeof rec.content === 'string' ? rec.content : '';
+        const errStr = typeof rec.error === 'string' && rec.error ? rec.error : undefined;
+        const parsed = parseTranscriptToolHeader(rawOut);
+        const exitCode = parsed.exitCode ?? (typeof rec.exit_code === 'number' ? rec.exit_code : undefined);
+        const pending = pendingCalls.shift();
+        const name = pending?.name ?? (typeof rec.tool_name === 'string' && rec.tool_name ? rec.tool_name : 'tool');
+        const kind = pending?.kind ?? toolKind(name);
+        const callId = pending?.callId ?? `step-${stepIdx}`;
+        const startAt = parsed.createdAt ?? pending?.callEv.ts ?? createdTs;
+        const endAt = parsed.completedAt ?? createdTs;
+        const isError = rec.status === 'ERROR' || errStr !== undefined || (exitCode !== undefined && exitCode !== 0);
+        const outText = parsed.body || errStr || '';
+        const child = name === 'invoke_subagent' ? parsed.subagentId : undefined;
+        if (child && pending && events.includes(pending.callEv)) {
+          pending.callEv.attrs.agent = { id: child, link_session: `${target.prefix}:${child}` };
         }
+        const resEv = emit('tool.result', 'tool', `${name}  ${words(isError ? 'error →' : '→', oneLine(outText, 120))}`, {
+          tool: {
+            name, call_id: callId, kind, output: truncate(outText, INDEX_TEXT_MAX), output_len: outText.length,
+            output_tail: outputTail(outText), exit_code: exitCode, is_error: isError,
+          },
+          error: errStr ? { message: truncate(errStr, 1024) } : undefined,
+        }, endAt, isError ? ['error'] : undefined);
+        const dur = startAt !== undefined && endAt !== undefined && endAt >= startAt ? endAt - startAt : undefined;
+        const spId = spanId(session, 'tool', callId);
+        const statusKey = TEXT_STATUS[String(rec.status ?? 'DONE')] ?? 'ok';
+        const spanStatus: SpanStatus = isError && statusKey === 'ok' ? 'error' : statusKey;
+        const firstEvId = pending && events.includes(pending.callEv) ? pending.callEv.id : resEv.id;
+        spans.push({
+          rec: 'span', id: spId, session, kind: 'tool', name, parent: pending?.turnId ?? currentTurnId,
+          start: startAt ?? resEv.ts, end: dur !== undefined ? endAt : undefined, dur,
+          durSrc: parsed.createdAt !== undefined && parsed.completedAt !== undefined ? 'logged:transcript.completed_at' : dur !== undefined ? 'derived:ts-gap' : 'unknown',
+          status: spanStatus, firstEvent: firstEvId, lastEvent: resEv.id,
+          linkSession: child ? `${target.prefix}:${child}` : undefined,
+          attrs: { tool: { name, kind } },
+        });
+        if (pending && events.includes(pending.callEv)) pending.callEv.span = spId;
+        resEv.span = spId;
+        resEv.dur = dur;
+        return;
       }
-    }
-    if (!events.length) {
-      stats.skipped = 1;
-      return stats;
-    }
 
-    const ws = list(tmeta, 1)[0];
-    const cwd = fromFileUri(str(ws, 1)) ?? fromFileUri(strs(tmeta, 7)[0]) ?? fromFileUri(summary?.workspace);
-    const root = fromFileUri(str(ws, 2)) ?? cwd;
-    const parent = str(tmeta, 5) ?? summary?.parent;
+      if (stepType === 'SYSTEM_MESSAGE') {
+        emit('context.attachment', 'system', 'system message', { context: { type: 'system message' } });
+        return;
+      }
+
+      if (stepType === 'CHECKPOINT') {
+        const uncached = typeof rec.input_tokens === 'number' ? rec.input_tokens : undefined;
+        const cacheRead = typeof rec.cache_read_tokens === 'number' ? rec.cache_read_tokens : undefined;
+        const output = typeof rec.output_tokens === 'number' ? rec.output_tokens : undefined;
+        const tokens: TokenUsage | undefined = uncached !== undefined || cacheRead !== undefined || output !== undefined
+          ? { input: (uncached ?? 0) + (cacheRead ?? 0), uncached, cache_read: cacheRead, output }
+          : undefined;
+        emit('context.compaction', 'harness', 'checkpoint', { context: { type: 'checkpoint' }, tokens });
+        return;
+      }
+
+      if (stepType === 'ERROR_MESSAGE') {
+        const msg = typeof rec.error === 'string' ? rec.error : typeof rec.content === 'string' ? rec.content : 'error';
+        const ev = emit('llm.error', 'harness', words('error', oneLine(msg, 140)), { error: { message: truncate(msg, 1024) } }, createdTs, ['error']);
+        sink.emit({ rec: 'expert', session, event: ev.id, severity: 'error', group: 'api-error', message: `${target.agent} error: ${oneLine(msg, 200)}` });
+        return;
+      }
+
+      stats.unknown++;
+      emit('raw.unknown', 'harness', `step ${stepType}`, {});
+    },
+    (info, err) => {
+      stats.malformed++;
+      sink.emit({ rec: 'expert', session, severity: 'warn', group: 'malformed', message: `line ${info.line}: ${err.message}` });
+    },
+  );
+
+  stats.parsedBytes = readRes.parsedBytes;
+  stats.lines = readRes.lines;
+  stats.sha256 = readRes.sha256;
+
+  // Emit open tool spans for any in-flight tool calls at the tail of an active session.
+  for (const pending of pendingCalls) {
+    if (!events.includes(pending.callEv)) continue;
+    const spId = spanId(session, 'tool', pending.callId);
+    pending.callEv.span = spId;
+    spans.push({
+      rec: 'span', id: spId, session, kind: 'tool', name: pending.name, parent: pending.turnId,
+      start: pending.callEv.ts, durSrc: 'unknown', status: 'open',
+      firstEvent: pending.callEv.id, lastEvent: pending.callEv.id, attrs: { tool: { name: pending.name, kind: pending.kind } },
+    });
+  }
+
+  if (!events.length) {
+    stats.skipped ||= 1;
+    return stats;
+  }
+
+  const dbPath = join(baseDir, 'conversations', `${conv}.db`);
+  const summary = await readSummary(join(baseDir, 'conversation_summaries.db'), conv);
+  const wsMeta = peekTrajectoryWorkspace(dbPath);
+  const cwd = wsMeta?.cwd ?? fromFileUri(summary?.workspace);
+  const root = wsMeta?.root ?? cwd;
+  const parent = wsMeta?.parent ?? summary?.parent;
+  const srcEnum = peekTrajectorySource(baseDir, conv) ?? summary?.source;
+  const entrypoint = (srcEnum !== undefined ? TRAJECTORY_ENTRYPOINTS[srcEnum] : undefined)
+    ?? (basename(baseDir) === 'antigravity-ide' ? 'ide' : 'app');
+
+  // Define the session when no checkpointed `.db` steps exist; otherwise emit `enrich` so live WAL steps never leave metadata blank.
+  if (maxDbIdx < 0) {
     sink.emit({
       rec: 'session',
       id: session,
-      agent: 'antigravity',
+      agent: target.agent,
       nativeId: conv,
       role: parent ? 'subagent' : 'main',
-      parentId: parent ? `ag:${parent}` : undefined,
-      title: summary?.title,
+      parentId: parent ? `${target.prefix}:${parent}` : undefined,
+      title: summary?.title ?? firstPrompt,
       cwd,
       project: root ? basename(root) : undefined,
-      git: str(ws, 4) ? { branch: str(ws, 4) } : undefined,
-      models: [...models],
-      entrypoint: basename(dirname(dirname(path))) === 'antigravity-ide' ? 'ide' : 'app',
-      createdTs: time(tmeta, 2),
-      meta: { trajectoryId: traj?.trajectory_id, trajectoryType: traj?.trajectory_type, projectId: str(tmeta, 18), status: summary?.status },
+      git: wsMeta?.branch ? { branch: wsMeta.branch } : undefined,
+      entrypoint,
+      createdTs: firstTs,
+      meta: { transcriptOnly: true, trajectorySource: srcEnum, status: summary?.status },
     });
-    for (const ev of events) sink.emit(ev);
-    for (const sp of spans) {
-      if (sp.kind === 'turn' && sp.end !== undefined) sp.dur = sp.end - sp.start;
-      sink.emit(sp);
-    }
-    return stats;
-  },
-};
+  } else {
+    sink.emit({
+      rec: 'enrich',
+      session,
+      fields: {
+        title: summary?.title ?? firstPrompt,
+        cwd,
+        project: root ? basename(root) : undefined,
+        git: wsMeta?.branch ? { branch: wsMeta.branch } : undefined,
+      },
+      meta: { liveWalSteps: events.length },
+    });
+  }
+
+  for (const ev of events) sink.emit(ev);
+  for (const sp of spans) {
+    if (sp.kind === 'turn' && sp.end !== undefined) sp.dur = sp.end - sp.start;
+    sink.emit(sp);
+  }
+  return stats;
+}
+
+function stripUserRequestTags(text: string): string {
+  const m = /<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/.exec(text);
+  return m ? m[1] : text;
+}
+
+function parseTranscriptToolHeader(text: string): { createdAt?: number; completedAt?: number; exitCode?: number; subagentId?: string; body: string } {
+  const lines = text.split('\n');
+  let i = 0;
+  let createdAt: number | undefined;
+  let completedAt: number | undefined;
+  while (i < Math.min(lines.length, 4)) {
+    const cm = /^Created At:\s*(.+)$/.exec(lines[i]);
+    if (cm) { createdAt = isoToUs(cm[1].trim()); i++; continue; }
+    const dm = /^Completed At:\s*(.+)$/.exec(lines[i]);
+    if (dm) { completedAt = isoToUs(dm[1].trim()); i++; continue; }
+    break;
+  }
+  const rest = lines.slice(i).join('\n').trimStart();
+  const exitMatch = /^Command exited with code (-?\d+)\./m.exec(rest);
+  const exitCode = exitMatch ? Number(exitMatch[1]) : undefined;
+  const subMatch = /conversationId["':\s]+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(rest);
+  return { createdAt, completedAt, exitCode, subagentId: subMatch?.[1], body: rest };
+}
 
 type Emit = (kind: EventKind, actor: EventRec['actor'], summary: string, attrs: Attrs, at?: number, flags?: EventFlag[]) => EventRec;
 
@@ -296,15 +820,14 @@ type Emit = (kind: EventKind, actor: EventRec['actor'], summary: string, attrs: 
  */
 function toolStep(
   idx: number, type: number, status: number, step: Pb, call: Pb, name: string, created: number | undefined, completed: number | undefined,
-  errorText: string | undefined, emit: Emit, session: string, spans: SpanRec[], turn: SpanRec | undefined,
+  errorText: string | undefined, emit: Emit, session: string, prefix: AgentPrefix, spans: SpanRec[], turn: SpanRec | undefined,
 ): void {
   const args = tryJson(str(call, CALL.args)) ?? str(call, CALL.args);
   const input = camelKeys(args);
   const kind = type === MCP_TOOL ? 'mcp' : toolKind(name);
   const inputSummary = summarizeToolInput(name, input);
   const command = kind === 'shell' ? strField(input, 'commandLine', 'command') : undefined;
-  // Generic steps (most tools in recent versions) keep the model-facing result text and render blocks: a
-  // terminal block with the command's exit code, an agent block naming a subagent's conversation.
+  const changes = editChanges(name, input);
   const generic = sub(sub(step, STEP.generic), 2);
   const blocks = list(sub(generic, 3), 10);
   const terminal = blocks.map((b) => sub(b, 3)).find((t) => t.size);
@@ -312,12 +835,12 @@ function toolStep(
   const child = str(subagent, 5) ?? list(subagent, 10).map((r) => str(r, 1)).find(Boolean) ?? blocks.map((b) => str(sub(b, 4), 1)).find(Boolean);
   const callEv = emit('tool.call', 'assistant', `${name}  ${inputSummary}`, {
     tool: { name, call_id: str(call, CALL.id), kind, command, input: compact(input, { maxString: INDEX_INPUT_MAX_STRING }), input_summary: inputSummary },
-    agent: child || str(subagent, 1) ? { id: child, type: str(subagent, 1), description: truncate(str(subagent, 2), 512), link_session: child ? `ag:${child}` : undefined } : undefined,
+    ...(changes.length ? { change: { files: changes } } : {}),
+    agent: child || str(subagent, 1) ? { id: child, type: str(subagent, 1), description: truncate(str(subagent, 2), 512), link_session: child ? `${prefix}:${child}` : undefined } : undefined,
   });
   const id = spanId(session, 'tool', str(call, CALL.id) ?? idx);
   const evs = [callEv];
 
-  // Permission prompts: the requested interaction, then the user's answer, whose oneof message leads with allow or confirm.
   if (step.has(STEP.requested)) evs.push(emit('permission.request', 'harness', words('permission?', name, oneLine(command ?? inputSummary, 120)), { permission: { tool: name }, tool: { call_id: str(call, CALL.id), command } }));
   for (const done of list(step, STEP.completed)) {
     const response = sub(done, 2);
@@ -333,14 +856,15 @@ function toolStep(
   if (outcome) {
     const rc = sub(step, STEP.runCommand);
     const sh = sub(step, STEP.shellExec);
-    // run_command and terminal render blocks have optional exit codes. ShellExec's int32 is not
-    // optional: an omitted scalar in an existing message means zero, per its protobuf descriptor.
     const exitCode = rc.has(6) ? int32(rc, 6) : step.has(STEP.shellExec) ? int32(sh, 2) ?? 0 : terminal?.has(3) ? int32(terminal, 3) : undefined;
     const output = str(sub(rc, 21), 1) ?? (words(str(rc, 4), str(rc, 5)) || undefined) ?? str(sh, 3) ?? str(generic, 1) ?? str(terminal, 4) ?? errorText ?? '';
     const rejected = int(rc, 14) === 1;
     const isError = outcome === 'error' || (exitCode !== undefined && exitCode !== 0) || errorText !== undefined || str(sh, 4) !== undefined;
     result = emit('tool.result', 'tool', `${name}  ${words(isError ? 'error →' : outcome === 'ok' ? '→' : `${outcome} →`, oneLine(output, 120))}`, {
-      tool: { name, call_id: str(call, CALL.id), kind, output: truncate(output, INDEX_TEXT_MAX), output_len: output.length, exit_code: exitCode, is_error: isError },
+      tool: {
+        name, call_id: str(call, CALL.id), kind, output: truncate(output, INDEX_TEXT_MAX), output_len: output.length,
+        output_tail: outputTail(output), exit_code: exitCode, is_error: isError,
+      },
       error: errorText ? { message: truncate(errorText, 1024) } : undefined,
     }, completed, isError ? ['error'] : undefined);
     if (rejected) result.attrs.permission = { granted: false };
@@ -351,14 +875,14 @@ function toolStep(
   spans.push({
     rec: 'span', id, session, kind: 'tool', name, parent: turn?.id, start: created ?? callEv.ts, end: result && dur !== undefined ? completed : undefined, dur: result ? dur : undefined,
     durSrc: result && dur !== undefined ? 'logged:metadata.completed_at' : 'unknown', status: spanStatus, firstEvent: callEv.id, lastEvent: evs.at(-1)!.id,
-    linkSession: child ? `ag:${child}` : undefined, attrs: { tool: { name, kind } },
+    linkSession: child ? `${prefix}:${child}` : undefined, attrs: { tool: { name, kind } },
   });
   for (const e of evs) e.span = id;
   if (result) result.dur = spans.at(-1)!.dur;
 }
 
-/** The conversation's row in conversation_summaries.db, next to the conversations folder (title, workspace, status). */
-async function readSummary(path: string, conv: string): Promise<{ title?: string; workspace?: string; parent?: string; status?: string } | undefined> {
+/** The conversation's row in conversation_summaries.db, next to the conversations folder (title, workspace, status, source). */
+async function readSummary(path: string, conv: string): Promise<{ title?: string; workspace?: string; parent?: string; status?: string; source?: number } | undefined> {
   let db;
   try {
     db = openReadOnly(path);
@@ -366,7 +890,13 @@ async function readSummary(path: string, conv: string): Promise<{ title?: string
     if (!r) return undefined;
     const uris = tryJson(r.workspace_uris);
     const text = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
-    return { title: text(r.title), workspace: Array.isArray(uris) ? text(uris[0]) : undefined, parent: text(r.parent_conversation_id), status: text(r.status) };
+    return {
+      title: text(r.title),
+      workspace: Array.isArray(uris) ? text(uris[0]) : undefined,
+      parent: text(r.parent_conversation_id),
+      status: text(r.status),
+      source: typeof r.source === 'number' ? r.source : undefined,
+    };
   } catch {
     return undefined;
   } finally {
@@ -386,21 +916,17 @@ function nativeOf(step: Pb, meta: Pb): unknown {
 
 function tokenUsage(u: Pb): TokenUsage | undefined {
   if (![USAGE.input, USAGE.output, USAGE.cacheRead, USAGE.cacheWrite, USAGE.thinking].some((f) => u.has(f))) return undefined;
-  // Scalar zeros are omitted by protobuf, including all-cached input and empty output.
   const uncached = int(u, USAGE.input) ?? 0;
   const output = int(u, USAGE.output) ?? 0;
   const cacheRead = int(u, USAGE.cacheRead);
   const cacheWrite = int(u, USAGE.cacheWrite);
-  // input_tokens excludes cached tokens; TokenUsage.input counts them.
   return { input: (uncached ?? 0) + (cacheRead ?? 0) + (cacheWrite ?? 0), uncached, cache_read: cacheRead, cache_write: cacheWrite, output, reasoning: int(u, USAGE.thinking) };
 }
 
-/** CortexErrorDetails: the user-facing message, else the short or model-facing one. */
 function errorMessage(e: Pb): string | undefined {
   return str(e, 1) ?? str(e, 2) ?? str(e, 9) ?? str(e, 3);
 }
 
-/** Antigravity tool arguments use PascalCase keys (CommandLine, AbsolutePath); the shared summaries expect camelCase. */
 function camelKeys(v: unknown): unknown {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return v;
   return Object.fromEntries(Object.entries(v).map(([k, x]) => [k.charAt(0).toLowerCase() + k.slice(1), x]));
@@ -450,7 +976,6 @@ function varint(b: Buffer, at: { i: number }): number {
   return n;
 }
 
-/** Keep sign-extended int32 values exact until their field type is known. */
 function scalar(b: Buffer, at: { i: number }): number | bigint {
   let r = 0n;
   for (let shift = 0n; shift <= 63n; shift += 7n) {
@@ -463,7 +988,6 @@ function scalar(b: Buffer, at: { i: number }): number | bigint {
   throw new RangeError('oversized varint');
 }
 
-/** A nested message (the last occurrence); empty when absent or not a message. */
 function sub(m: Pb, f: number): Pb {
   const v = m.get(f)?.at(-1);
   if (!Buffer.isBuffer(v)) return new Map();
@@ -503,7 +1027,6 @@ function int32(m: Pb, f: number): number | undefined {
   return typeof v === 'number' || typeof v === 'bigint' ? Number(BigInt.asIntN(32, BigInt(v))) : undefined;
 }
 
-/** A repeated integer field, packed or not. */
 function ints(m: Pb, f: number): number[] {
   const out: number[] = [];
   for (const v of m.get(f) ?? []) {
@@ -520,14 +1043,12 @@ function ints(m: Pb, f: number): number[] {
   return out;
 }
 
-/** google.protobuf.Timestamp {seconds, nanos} in µs. */
 function time(m: Pb, f: number): number | undefined {
   const t = sub(m, f);
   const s = int(t, 1);
   return s ? s * 1e6 + Math.floor((int(t, 2) ?? 0) / 1000) : undefined;
 }
 
-/** google.protobuf.Duration {seconds, nanos} in µs. */
 function duration(m: Pb, f: number): number | undefined {
   if (!m.has(f)) return undefined;
   const d = sub(m, f);

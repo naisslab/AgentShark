@@ -63,7 +63,7 @@ struct Recommendation: Hashable {
         self.blocks = blocks
         let mentionsOTLP = source.contains("OTLP") || source.localizedCaseInsensitiveContains("OpenTelemetry")
         self.effect = effect ?? (mentionsOTLP ? Self.externalCollectorEffect : nil)
-        configFiles = Self.matches(#"~/[\w.\-/]+\.(?:json|toml)"#, in: source).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+        configFiles = Self.matches(#"~/[\w.\-/]+\.(?:json|toml|ya?ml)"#, in: source).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
         suggestsCapture = source.contains("agentshark capture")
     }
 
@@ -110,7 +110,7 @@ struct Recommendation: Hashable {
         return (code, rest)
     }
 
-    private static let commandWords: Set<String> = ["agentshark", "export", "mkdir", "npm", "node", "codex", "claude", "defaults", "launchctl"]
+    private static let commandWords: Set<String> = ["agentshark", "export", "mkdir", "npm", "node", "codex", "claude", "gemini", "agy", "dsh", "defaults", "launchctl"]
 
     /// A backticked span that runs in a shell, as opposed to a field name such as `cleanupPeriodDays`.
     static func isCommand(_ s: String) -> Bool {

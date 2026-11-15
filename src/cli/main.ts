@@ -25,7 +25,7 @@ interface CommandSpec {
 }
 
 const INDEX_OPT: OptionSpec = { type: 'string', arg: 'PATH', help: 'index database (default ~/.agentshark/index.sqlite or $AGENTSHARK_HOME)' };
-const AGENT_OPT: OptionSpec = { type: 'string', multiple: true, arg: 'cc|cw|cx|cp|ag', help: 'only this agent; repeat or comma-separate for several' };
+const AGENT_OPT: OptionSpec = { type: 'string', multiple: true, arg: 'cc|cw|cx|cp|ag|gm|ds', help: 'only this agent; repeat or comma-separate for several' };
 const FILTER_OPT: OptionSpec = { type: 'string', short: 'f', arg: 'EXPR', help: 'display filter, e.g. \'tool.name == "Bash" && dur > 2s\'' };
 const SESSION_OPT: OptionSpec = { type: 'string', short: 's', multiple: true, arg: 'ID', help: 'only this session and its subagents (repeatable)' };
 const JSON_OPT: OptionSpec = { type: 'boolean', help: 'machine-readable output' };
@@ -53,7 +53,7 @@ export const COMMANDS: CommandSpec[] = [
       index: INDEX_OPT,
     },
     details:
-      'The first run indexes every supported log on this machine (Claude Code, Claude Cowork, Codex, Copilot Chat, Antigravity);\n' +
+      'The first run indexes every supported log on this machine (Claude Code, Claude Cowork, Codex, Copilot, Antigravity, Gemini, DeepSeek Harness);\n' +
       'later runs re-parse only changed files. The index lives in ~/.agentshark/index.sqlite (or $AGENTSHARK_HOME). Press Ctrl+C to stop.',
     run: async (a) => (await import('./serve.ts')).serve(a),
   },
@@ -169,7 +169,7 @@ export const COMMANDS: CommandSpec[] = [
   {
     name: 'index',
     summary: 'build or update the live index',
-    usage: 'agentshark index [--full | --rederive] [--agent cc|cw|cx|cp|ag] [--index PATH]',
+    usage: 'agentshark index [--full | --rederive] [--agent cc|cw|cx|cp|ag|gm|ds] [--index PATH]',
     options: {
       full: { type: 'boolean', help: 're-parse every source, not only changed ones' },
       rederive: { type: 'boolean', help: 're-derive the analysis tables (steps, failures, episodes, ...) without re-parsing' },
@@ -180,11 +180,11 @@ export const COMMANDS: CommandSpec[] = [
     run: async (a) => (await import('./indexing.ts')).index(a),
   },
   {
-    name: 'config', summary: 'show or configure the local Codex and Claude source folders',
-    usage: 'agentshark config [--agent codex|claude --add PATH|--remove PATH] [--no-auto-discover|--auto-discover]',
+    name: 'config', summary: 'show or configure local agent source folders',
+    usage: 'agentshark config [--agent codex|claude|antigravity|gemini|deepseek --add PATH|--remove PATH] [--no-auto-discover|--auto-discover]',
     options: {
-      agent: { type: 'string', arg: 'codex|claude', help: 'agent whose source folders should change' },
-      add: { type: 'string', multiple: true, arg: 'PATH', help: 'add an agent data folder (.codex or .claude)' },
+      agent: { type: 'string', arg: 'codex|claude|antigravity|gemini|deepseek', help: 'agent whose source folders should change' },
+      add: { type: 'string', multiple: true, arg: 'PATH', help: 'add an agent data folder (.codex, .claude, .gemini/antigravity, .gemini, or .dsh)' },
       remove: { type: 'string', multiple: true, arg: 'PATH', help: 'remove an explicit source folder' },
       'auto-discover': { type: 'boolean', help: 'also discover the default local source folders' },
       'no-auto-discover': { type: 'boolean', help: 'read only explicitly configured source folders' },
@@ -280,11 +280,14 @@ export const COMMANDS: CommandSpec[] = [
     },
     details: [
       'Register it once; AgentShark never edits agent configuration:',
-      '  Claude Code:  claude mcp add agentshark -- agentshark mcp',
-      '  Codex:        add to ~/.codex/config.toml',
-      '                [mcp_servers.agentshark]',
-      '                command = "agentshark"',
-      '                args = ["mcp"]',
+      '  Claude Code:      claude mcp add agentshark -- agentshark mcp',
+      '  Codex:            add to ~/.codex/config.toml',
+      '                    [mcp_servers.agentshark]',
+      '                    command = "agentshark"',
+      '                    args = ["mcp"]',
+      '  Gemini CLI:       gemini mcp add agentshark -- agentshark mcp',
+      '  Antigravity:      add {"mcpServers":{"agentshark":{"command":"agentshark","args":["mcp"]}}} to ~/.gemini/antigravity/mcp_config.json',
+      '  DeepSeek Harness: add {"mcpServers":{"agentshark":{"command":"agentshark","args":["mcp"]}}} in DeepSeek Harness MCP settings',
       'The server opens the index read-only and never indexes; keep `agentshark serve` running for fresh data.',
       'Trace text appears only in *_excerpt fields, redacted (home, user name, secrets) and cut to 300 characters.',
     ].join('\n'),

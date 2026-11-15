@@ -158,7 +158,7 @@ struct StatsResourcesView: View {
     }
 
     private var discoveryNote: String {
-        guard resources.status.enabled else { return "Finds local writers of indexed Codex, Claude Code, Claude Cowork and Copilot Chat logs, then includes their threads and child processes. No PID entry needed." }
+        guard resources.status.enabled else { return "Finds local writers of indexed Codex, Claude, Copilot, Antigravity, Gemini and DeepSeek Harness logs, then includes their threads and child processes. No PID entry needed." }
         guard let discovery = resources.status.discovery else { return "This recording uses manual bindings. Start a new recording with the main Start button to enable automatic discovery." }
         if discovery.state == "searching" { return "Finding local agent processes and matching their open transcripts to session IDs…" }
         if discovery.state == "unavailable" { return "Automatic discovery is temporarily unavailable. Retrying; existing process identities remain pinned." }
