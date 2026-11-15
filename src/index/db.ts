@@ -10,8 +10,8 @@ import { DatabaseSync } from 'node:sqlite';
  * 4: the derived tables of SPEC §12.3 (steps, failures, episodes, signatures, ...) and the adapter fields
  * attrs.tool.output_tail, attrs.tool.proc_id and attrs.change.files.
  * 5: Copilot CLI events and VS Code mutation logs, timed tools, tokens and shell-tool classification.
- * 6: Antigravity JSONL transcripts, Gemini App & CLI sessions, and DeepSeek Harness multi-frame zstd logs.
- * 7: Reconcile Cortex checkpoints per step and measure DeepSeek TTFT from content tokens.
+ * 6: Copilot CLI missing tool output remains unknown instead of becoming an empty observation.
+ * 7: Antigravity/Gemini Cortex reconciliation, Gemini CLI sessions, and DeepSeek multi-frame zstd logs with content-token TTFT.
  *
  * The analysis pass keeps two more versions in `meta` (see schema.sql): `analysis_version` (ANALYSIS_VERSION in
  * src/index/derive.ts) and `sig_version` (SIG_VERSION). A mismatch there never rebuilds the index: a writable open or

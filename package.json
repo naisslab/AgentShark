@@ -18,7 +18,7 @@
   "scripts": {
     "start": "node bin/agentshark.ts serve",
     "index": "node bin/agentshark.ts index",
-    "test": "node --test test/*.test.ts",
+    "test": "node scripts/test.mjs",
     "build": "node scripts/build.mjs",
     "prepack": "npm run build",
     "desktop:build": "bash mac/scripts/build-app.sh"

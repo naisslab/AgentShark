@@ -1,5 +1,6 @@
 -- AgentShark index schema (SPEC §5, §12.3). Bump SCHEMA_VERSION in src/index/db.ts when this changes.
--- Normalization v7 reconciles Cortex checkpoints per step and measures DeepSeek TTFT from content tokens.
+-- Normalization v6 preserves missing Copilot CLI tool output as unknown, distinct from recorded empty output.
+-- Normalization v7 adds Antigravity/Gemini/DeepSeek sources, reconciles Cortex checkpoints, and measures content-token TTFT.
 
 -- Keys: schema_version (db.ts), link_pending (indexer), capture_* (capture reader), and for the analysis pass
 -- (src/index/derive.ts, SPEC §12.3.1):

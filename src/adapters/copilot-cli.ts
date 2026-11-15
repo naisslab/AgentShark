@@ -387,7 +387,9 @@ function decode(type: string, d: any): Decoded | undefined {
       };
     }
     case 'tool.execution_complete': {
-      const output = str(d.result?.content) ?? str(d.error?.message) ?? '';
+      // Persisted logs can omit output; only a recorded string establishes an observation, even if empty.
+      const output = typeof d.result?.content === 'string' ? d.result.content
+        : typeof d.error?.message === 'string' ? d.error.message : undefined;
       const exitCode = num(d.shellExecution?.exitCode);
       const isError = d.success === false || (exitCode !== undefined && exitCode !== 0);
       return {
@@ -395,7 +397,7 @@ function decode(type: string, d: any): Decoded | undefined {
         actor: 'tool',
         flags: isError ? ['error'] : undefined,
         summary: words(isError ? 'error →' : '→', oneLine(output, 120)),
-        attrs: { tool: { call_id: str(d.toolCallId), output: truncate(output, INDEX_TEXT_MAX), output_len: output.length, exit_code: exitCode, is_error: isError } },
+        attrs: { tool: { call_id: str(d.toolCallId), output: truncate(output, INDEX_TEXT_MAX), output_len: output?.length, exit_code: exitCode, is_error: isError } },
       };
     }
     case 'subagent.started':
