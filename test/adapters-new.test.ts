@@ -199,6 +199,13 @@ test('Antigravity, Gemini, and DeepSeek Harness end-to-end discovery, indexing, 
       assert.equal(byId['gm:vega-001'].entrypoint, 'app');
       assert.equal(byId['gm:vega-001'].project, 'vega-proj');
       assert.equal(byId['gm:vega-001'].n_events, 3);
+      const vegaEvents = db.prepare('SELECT kind, summary FROM events WHERE session_id = ? ORDER BY seq').all('gm:vega-001');
+      assert.deepEqual(vegaEvents.map(e => [e.kind, e.summary]), [
+        ['user.prompt', 'Hello Vega'], ['llm.thinking', 'Greeting user'], ['llm.text', 'Hi from Vega!'],
+      ]);
+      const vegaSearch = db.prepare("SELECT e.kind FROM events_fts f JOIN events e ON e.rid = f.rowid WHERE events_fts MATCH ? AND e.session_id = ?");
+      assert.deepEqual(vegaSearch.all('"Hello Vega"', 'gm:vega-001').map(e => e.kind), ['user.prompt']);
+      assert.deepEqual(vegaSearch.all('"Hi from Vega"', 'gm:vega-001').map(e => e.kind), ['llm.text']);
 
       assert.equal(byId[`gm:${gmConvId}`].entrypoint, 'app');
       assert.equal(byId[`gm:${gmConvId}`].project, 'code-mode-proj');

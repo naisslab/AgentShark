@@ -419,14 +419,24 @@ async function parseVegaArchive(
     return ev;
   };
 
-  const prompt = str(doc.prompt) ?? str(root.prompt) ?? str(doc.title) ?? str(root.title);
-  if (prompt) emit('user.prompt', 'vega/prompt', 'user', oneLine(prompt), { text: truncate(prompt, INDEX_TEXT_MAX), text_len: prompt.length }, createdTs);
+  const prompt = extractGeminiContent(doc.prompt ?? root.prompt) || undefined;
+  // Role-tagged steps already contain the conversation. Archive titles are labels, not user input.
+  if (prompt && !items.some(item => item?.role === 'user')) {
+    emit('user.prompt', 'vega/prompt', 'user', oneLine(prompt), { text: truncate(prompt, INDEX_TEXT_MAX), text_len: prompt.length }, createdTs);
+  }
 
   items.forEach((item, idx) => {
     if (!item || typeof item !== 'object') return;
     const ts = anyTimeUs(item.timestamp ?? item.createdAt ?? item.startedAt);
     const endTs = anyTimeUs(item.completedAt ?? item.finishedAt);
     const dur = ts !== undefined && endTs !== undefined && endTs >= ts ? endTs - ts : undefined;
+    const text = extractGeminiContent(item.content ?? item.reply ?? item.text ?? item.title ?? item.summary);
+    if (item.role === 'user') {
+      emit('user.prompt', 'vega/prompt', 'user', oneLine(text), {
+        text: truncate(text, INDEX_TEXT_MAX), text_len: text.length,
+      }, ts);
+      return;
+    }
     const model = str(item.model);
     if (model) models.add(model);
 
@@ -461,7 +471,7 @@ async function parseVegaArchive(
       resEv.dur = dur;
       return;
     }
-    const reply = str(item.reply ?? item.text ?? item.title ?? item.summary) ?? '';
+    const reply = text;
     if (reply || model) {
       const ev = emit('llm.text', 'vega/modelCall', 'assistant', oneLine(reply || model || 'step'), {
         text: truncate(reply, INDEX_TEXT_MAX), text_len: reply.length, llm: cleanObj({ model, latency_ms: dur !== undefined ? dur / 1000 : undefined }),
@@ -485,8 +495,9 @@ async function parseVegaArchive(
 
   const firstEv = events[0];
   const lastEv = events.at(-1)!;
+  const firstPrompt = events.find(ev => ev.kind === 'user.prompt')?.attrs.text;
   spans.unshift({
-    rec: 'span', id: turnId, session, kind: 'turn', name: oneLine(prompt ?? str(doc.title) ?? 'Gemini task', 80),
+    rec: 'span', id: turnId, session, kind: 'turn', name: oneLine(firstPrompt ?? str(doc.title ?? root.title) ?? 'Gemini task', 80),
     start: firstEv.ts, end: lastEv.ts, dur: lastEv.ts - firstEv.ts, durSrc: 'derived:ts-gap', status: 'ok',
     firstEvent: firstEv.id, lastEvent: lastEv.id, attrs: { turn: { index: 0 } },
   });
@@ -497,7 +508,7 @@ async function parseVegaArchive(
     agent: 'gemini',
     nativeId,
     role: 'main',
-    title: str(doc.title ?? root.title) ?? (prompt ? oneLine(prompt, 120) : undefined),
+    title: str(doc.title ?? root.title) ?? (firstPrompt ? oneLine(firstPrompt, 120) : undefined),
     cwd,
     project: cwd ? basename(cwd) : undefined,
     models: [...models],
@@ -546,6 +557,7 @@ function extractGeminiContent(content: unknown): string {
     }).filter(Boolean).join('\n');
   }
   if (content && typeof content === 'object' && typeof (content as any).text === 'string') return (content as any).text;
+  if (content && typeof content === 'object' && Array.isArray((content as any).parts)) return extractGeminiContent((content as any).parts);
   return '';
 }
 

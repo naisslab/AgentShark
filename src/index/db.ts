@@ -12,13 +12,14 @@ import { DatabaseSync } from 'node:sqlite';
  * 5: Copilot CLI events and VS Code mutation logs, timed tools, tokens and shell-tool classification.
  * 6: Copilot CLI missing tool output remains unknown instead of becoming an empty observation.
  * 7: Antigravity/Gemini Cortex reconciliation, Gemini CLI sessions, and DeepSeek multi-frame zstd logs with content-token TTFT.
+ * 8: Preserve Vega role-tagged prompts and responses, including structured content.
  *
  * The analysis pass keeps two more versions in `meta` (see schema.sql): `analysis_version` (ANALYSIS_VERSION in
  * src/index/derive.ts) and `sig_version` (SIG_VERSION). A mismatch there never rebuilds the index: a writable open or
  * `agentshark index --rederive` re-derives the derived tables from the indexed events without re-parsing, and
  * read-only opens report the gap 'analysis-outdated' instead of failing.
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /** `PRAGMA application_id` of every AgentShark index ("ASK1"); a file without it is never modified or deleted. */
 export const APPLICATION_ID = 0x41534b31;
@@ -55,7 +56,7 @@ export interface OpenIndexOptions {
 }
 
 /** Older schema versions that readers keep serving while the new index builds beside them. */
-export const READABLE_OLD_SCHEMAS = [3, 4, 5, 6];
+export const READABLE_OLD_SCHEMAS = [3, 4, 5, 6, 7];
 
 export function nextIndexPath(path: string): string {
   return `${path}.next`;
