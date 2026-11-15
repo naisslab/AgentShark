@@ -187,7 +187,21 @@ enum SelfTest {
                 "baseURL": .string(ep.baseURL.absoluteString), "mode": .string(ep.mode), "version": .string(ep.version),
                 "node": .string(engine.node?.version ?? ""),
             ])))
-            let info = await step("info", { try await api.info() }) {
+            let info = await step("info", {
+                // The ready handshake can precede a schema rebuild. Wait for its replacement index
+                // before creating views, which the engine invalidates when that replacement is promoted.
+                let waitStarted = Date()
+                var current = try await api.info()
+                while current.indexing.running || !(current.analysis?.pending.isEmpty ?? true) {
+                    if Date().timeIntervalSince(waitStarted) > timeout {
+                        throw APIError(status: 0, message: "Indexing did not settle within \(Int(timeout)) s",
+                                       code: "timeout", start: nil, end: nil)
+                    }
+                    try await Task.sleep(for: .milliseconds(100))
+                    current = try await api.info()
+                }
+                return current
+            }) {
                 .object(["mode": .string($0.mode), "sources": n($0.counts.sources), "sessions": n($0.counts.sessions),
                          "events": n($0.counts.events), "spans": n($0.counts.spans),
                          "analysisVersion": $0.analysis?.version.map { n($0) } ?? .null, "analysisPending": n($0.analysis?.pending.count ?? 0),
