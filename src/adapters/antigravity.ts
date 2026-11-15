@@ -5,11 +5,11 @@
 
 import { readdir } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import type { AgentKind, AgentPrefix, Attrs, EventFlag, EventKind, EventRec, SpanRec, SpanStatus, TokenUsage } from '../model/types.ts';
+import type { AgentKind, AgentPrefix, Attrs, EventFlag, EventKind, EventRec, IndexRecord, SpanRec, SpanStatus, TokenUsage } from '../model/types.ts';
 import {
   type Adapter, type DiscoverEnv, type LineInfo, type ParseContext, type ParseStats, type RecordSink, type SourceFile,
   INDEX_INPUT_MAX_STRING, INDEX_TEXT_MAX, agentRoots, compact, editChanges, emptyStats, eventId, fileInfo,
-  fromFileUri, isoToUs, oneLine, outputTail, readJsonl, spanId, summarizeToolInput, toolKind, truncate, tryJson,
+  fromFileUri, isoToUs, oneLine, outputTail, readJsonl, sourceId, spanId, summarizeToolInput, toolKind, truncate, tryJson,
 } from './adapter.ts';
 import { openReadOnly } from './codex-state.ts';
 
@@ -178,8 +178,48 @@ export async function discoverCortexSources(
 }
 
 export async function parseCortexSource(ctx: ParseContext, sink: RecordSink, target: CortexTarget = ANTIGRAVITY_TARGET): Promise<ParseStats> {
-  if (ctx.file.kind === 'antigravity-transcript') return parseTranscriptJsonl(ctx, sink, target);
-  return parseTrajectoryDb(ctx, sink, target);
+  const isTranscript = ctx.file.kind === 'antigravity-transcript';
+  const base = isTranscript ? dirname(dirname(dirname(dirname(dirname(ctx.file.path))))) : dirname(dirname(ctx.file.path));
+  const conv = trajectoryGroupKey(ctx.file.path) ?? basename(ctx.file.path, '.db');
+  const dbFile = isTranscript ? await fileInfo(join(base, 'conversations', `${conv}.db`), target.agent, 'trajectory-db', ctx.file.adapter) : ctx.file;
+  const logs = join(base, 'brain', conv, '.system_generated', 'logs');
+  const transcriptFile = isTranscript ? ctx.file :
+    await fileInfo(join(logs, 'transcript_full.jsonl'), target.agent, 'antigravity-transcript', ctx.file.adapter)
+    ?? await fileInfo(join(logs, 'transcript.jsonl'), target.agent, 'antigravity-transcript', ctx.file.adapter);
+  const dbRecords: IndexRecord[] = [];
+  const transcriptRecords: IndexRecord[] = [];
+  let dbStats = emptyStats();
+  if (dbFile) {
+    try {
+      dbStats = await parseTrajectoryDb({ ...ctx, file: dbFile, sourceId: sourceId(dbFile.path) }, { emit: r => { dbRecords.push(r); } }, target);
+    } catch (error) {
+      if (!isTranscript) throw error;
+      // A missing/unreadable checkpoint must not prevent recovery from the transcript.
+      dbRecords.length = 0;
+    }
+  }
+  const transcriptStats = transcriptFile ? await parseTranscriptJsonl(
+    { ...ctx, file: transcriptFile, sourceId: sourceId(transcriptFile.path) },
+    { emit: r => { transcriptRecords.push(r); } }, target, dbRecords,
+  ) : emptyStats();
+
+  // Each turn keeps one source owner. Both parser jobs compute the same complete bounds, so worker
+  // completion order cannot overwrite a full turn with a checkpoint-only version.
+  const combined = [...dbRecords, ...transcriptRecords];
+  const turns = new Map(combined.filter((r): r is SpanRec => r.rec === 'span' && r.kind === 'turn').map(r => [r.id, r]));
+  const last = new Map<string, EventRec>();
+  for (const r of combined) {
+    if (r.rec !== 'event' || !r.turn) continue;
+    const turn = turns.get(r.turn);
+    if (!turn) continue;
+    turn.end = Math.max(turn.end ?? turn.start, r.ts);
+    const previous = last.get(turn.id);
+    if (!previous || r.ts >= previous.ts) { last.set(turn.id, r); turn.lastEvent = r.id; }
+    if (r.flags?.includes('error') && r.kind.startsWith('llm.')) turn.status = 'error';
+  }
+  for (const turn of turns.values()) if (turn.end !== undefined) turn.dur = turn.end - turn.start;
+  for (const r of isTranscript ? transcriptRecords : dbRecords) sink.emit(r);
+  return isTranscript ? transcriptStats : dbStats;
 }
 
 export const antigravityAdapter: Adapter = {
@@ -448,19 +488,6 @@ interface PendingCall {
   turnId?: string;
 }
 
-function maxCheckpointedStepIndex(dbPath: string): number {
-  let db;
-  try {
-    db = openReadOnly(dbPath);
-    const row = db.prepare('SELECT count(*) AS n, max(idx) AS maxIdx FROM steps WHERE step_format = 0 AND length(step_payload) > 0').get() as { n?: number; maxIdx?: number | null } | undefined;
-    return row && (row.n ?? 0) > 0 && typeof row.maxIdx === 'number' ? row.maxIdx : -1;
-  } catch {
-    return -1;
-  } finally {
-    db?.close();
-  }
-}
-
 function peekTrajectoryWorkspace(dbPath: string): { cwd?: string; root?: string; branch?: string; parent?: string } | undefined {
   let db;
   try {
@@ -479,19 +506,28 @@ function peekTrajectoryWorkspace(dbPath: string): { cwd?: string; root?: string;
   }
 }
 
-async function parseTranscriptJsonl(ctx: ParseContext, sink: RecordSink, target: CortexTarget): Promise<ParseStats> {
+async function parseTranscriptJsonl(ctx: ParseContext, sink: RecordSink, target: CortexTarget, dbRecords: IndexRecord[]): Promise<ParseStats> {
   const { path } = ctx.file;
   const conv = trajectoryGroupKey(path) ?? basename(dirname(dirname(dirname(path))));
   // <base>/brain/<conv>/.system_generated/logs/transcript_full.jsonl → <base> is 4 levels up.
   const baseDir = dirname(dirname(dirname(dirname(dirname(path)))));
-  const maxDbIdx = maxCheckpointedStepIndex(join(baseDir, 'conversations', `${conv}.db`));
+  const dbEvents = dbRecords.filter((r): r is EventRec => r.rec === 'event');
+  const dbSpans = new Map(dbRecords.filter((r): r is SpanRec => r.rec === 'span').map(r => [r.id, r]));
+  const dbSteps = new Map<number, EventRec[]>();
+  for (const event of dbEvents) {
+    const idx = event.raw.block;
+    if (idx !== undefined) dbSteps.set(idx, [...(dbSteps.get(idx) ?? []), event]);
+  }
+  const replacedSteps = new Set<number>();
+  const removedCalls = new Set<EventRec>();
+  const hasDbSession = dbRecords.some(r => r.rec === 'session');
   const session = `${target.prefix}:${conv}`;
   const stats: ParseStats = { ...emptyStats(), dialect: basename(path) === 'transcript_full.jsonl' ? 'transcript-full-jsonl' : 'transcript-jsonl' };
 
   const events: EventRec[] = [];
   const spans: SpanRec[] = [];
   const pendingCalls: PendingCall[] = [];
-  const seqOffset = maxDbIdx >= 0 ? 1_000_000 : 0;
+  const seqOffset = hasDbSession ? 1_000_000 : 0;
   let currentTurnId: string | undefined;
   let currentTurnSpan: SpanRec | undefined;
   let turnIndex = 0;
@@ -512,34 +548,29 @@ async function parseTranscriptJsonl(ctx: ParseContext, sink: RecordSink, target:
       const stepType = typeof rec.type === 'string' ? rec.type : 'UNKNOWN';
       const stepSrc = typeof rec.source === 'string' ? rec.source : '';
 
-      // Track open turn index even across checkpointed lines so trailing WAL steps bind to the right turn span.
+      const checkpoint = dbSteps.get(stepIdx);
+      // A present row can still be in progress, or undecodable. A supported transcript record
+      // supersedes that row; terminal decoded database records retain their richer metadata.
+      const supported = ['USER_INPUT', 'PLANNER_RESPONSE', 'GENERIC', 'RUN_COMMAND', 'SHELL_EXEC', 'MCP_TOOL',
+        'SYSTEM_MESSAGE', 'CHECKPOINT', 'ERROR_MESSAGE'].includes(stepType);
+      const dbOwnsStep = !!checkpoint && (!supported || checkpoint.some(e => {
+        const span = e.span ? dbSpans.get(e.span) : undefined;
+        return e.kind !== 'raw.unknown' && (!span || span.kind === 'turn' || span.status !== 'open');
+      }));
+      if (checkpoint && !dbOwnsStep) replacedSteps.add(stepIdx);
+
       if (stepType === 'USER_INPUT' && stepSrc !== 'USER_IMPLICIT') {
         currentTurnId = spanId(session, 'turn', stepIdx);
-        if (stepIdx <= maxDbIdx) {
-          turnIndex++;
-          currentTurnSpan = undefined;
-        }
+        currentTurnSpan = undefined;
+        if (dbOwnsStep) turnIndex++;
       }
 
-      if (stepIdx <= maxDbIdx) {
-        // If the last checkpointed step was a PLANNER_RESPONSE whose GENERIC tool results are still in WAL,
-        // remember its tool calls without re-emitting the checkpointed step itself.
-        if (stepIdx === maxDbIdx && stepType === 'PLANNER_RESPONSE' && Array.isArray(rec.tool_calls)) {
-          rec.tool_calls.forEach((tc: any, i: number) => {
-            const name = typeof tc?.name === 'string' ? tc.name : 'tool';
-            const input = camelKeys(tc?.args ?? {});
-            const kind = toolKind(name);
-            const inputSummary = summarizeToolInput(name, input);
-            const callId = `step-${stepIdx}-call-${i}`;
-            // Create a synthetic reference to the checkpointed step without emitting a duplicate call event.
-            const fakeEv: EventRec = {
-              rec: 'event', id: `${ctx.sourceId}:db:${stepIdx}:${i}`, session, ts: createdTs ?? lastTs, tsSrc: 'logged',
-              seq: 0, kind: 'tool.call', proto: `${target.protoPrefix}/PLANNER_RESPONSE`, actor: 'assistant', summary: name, attrs: {},
-              raw: { source: ctx.sourceId, line: info.line, offset: info.offset, length: info.length },
-            };
-            pendingCalls.push({ callId, name, kind, input, inputSummary, command: kind === 'shell' ? strField(input, 'commandLine', 'command') : undefined, callEv: fakeEv, turnId: currentTurnId });
-          });
-        }
+      // Consume checkpointed results too: a parallel batch may straddle the checkpoint.
+      if (dbOwnsStep && ['GENERIC', 'RUN_COMMAND', 'SHELL_EXEC', 'MCP_TOOL'].includes(stepType)) {
+        const pending = pendingCalls.shift();
+        if (pending) removedCalls.add(pending.callEv);
+      }
+      if (dbOwnsStep && stepType !== 'PLANNER_RESPONSE') {
         stats.skipped++;
         return;
       }
@@ -611,20 +642,23 @@ async function parseTranscriptJsonl(ctx: ParseContext, sink: RecordSink, target:
         const failed = rec.status === 'ERROR' || typeof rec.error === 'string';
         const toolNames = calls.map((c) => c?.name).filter((n): n is string => typeof n === 'string' && !!n);
 
-        const first = thinking ? emit('llm.thinking', 'assistant', oneLine(thinking), { text: truncate(thinking, INDEX_TEXT_MAX), text_len: thinking.length }) : undefined;
-        const ev = emit('llm.text', 'assistant', text ? oneLine(text) : words('→', toolNames.join(', ')), {
-          text: truncate(text, INDEX_TEXT_MAX), text_len: text.length,
-          tokens,
-          tool_requests: toolNames.length || undefined,
-          error: failed ? { message: truncate(typeof rec.error === 'string' ? rec.error : 'step status ERROR', 1024) } : undefined,
-        }, createdTs, failed ? ['error'] : undefined);
-        const llmSpanId = spanId(session, 'llm', stepIdx);
-        spans.push({
-          rec: 'span', id: llmSpanId, session, kind: 'llm', name: target.agent, parent: currentTurnId,
-          start: ev.ts, durSrc: 'unknown', status: failed ? 'error' : TEXT_STATUS[String(rec.status ?? '')] ?? 'open',
-          firstEvent: (first ?? ev).id, lastEvent: ev.id, attrs: { tokens },
-        });
-        for (const e of first ? [first, ev] : [ev]) e.span = llmSpanId;
+        if (!dbOwnsStep) {
+          const first = thinking ? emit('llm.thinking', 'assistant', oneLine(thinking), { text: truncate(thinking, INDEX_TEXT_MAX), text_len: thinking.length }) : undefined;
+          const ev = emit('llm.text', 'assistant', text ? oneLine(text) : words('→', toolNames.join(', ')), {
+            text: truncate(text, INDEX_TEXT_MAX), text_len: text.length,
+            tokens,
+            tool_requests: toolNames.length || undefined,
+            error: failed ? { message: truncate(typeof rec.error === 'string' ? rec.error : 'step status ERROR', 1024) } : undefined,
+          }, createdTs, failed ? ['error'] : undefined);
+          const llmSpanId = spanId(session, 'llm', stepIdx);
+          spans.push({
+            rec: 'span', id: llmSpanId, session, kind: 'llm', name: target.agent, parent: currentTurnId,
+            start: ev.ts, durSrc: 'unknown', status: failed ? 'error' : TEXT_STATUS[String(rec.status ?? '')] ?? 'open',
+            firstEvent: (first ?? ev).id, lastEvent: ev.id, attrs: { tokens },
+          });
+          for (const e of first ? [first, ev] : [ev]) e.span = llmSpanId;
+
+        } else { stats.skipped++; block = thinking ? 2 : 1; }
 
         calls.forEach((tc, i) => {
           const name = typeof tc?.name === 'string' && tc.name ? tc.name : 'tool';
@@ -722,6 +756,16 @@ async function parseTranscriptJsonl(ctx: ParseContext, sink: RecordSink, target:
   stats.lines = readRes.lines;
   stats.sha256 = readRes.sha256;
 
+  for (let i = events.length - 1; i >= 0; i--) if (removedCalls.has(events[i])) events.splice(i, 1);
+  events.forEach((event, i) => { event.seq = seqOffset + i; });
+  const replacedIds = new Set(dbEvents.filter(e => replacedSteps.has(e.raw.block!)).map(e => e.id));
+  for (let i = dbRecords.length - 1; i >= 0; i--) {
+    const r = dbRecords[i];
+    if ((r.rec === 'event' && replacedIds.has(r.id)) ||
+        (r.rec === 'span' && r.kind !== 'turn' && ((r.firstEvent && replacedIds.has(r.firstEvent)) || (r.lastEvent && replacedIds.has(r.lastEvent)))) ||
+        (r.rec === 'expert' && r.event && replacedIds.has(r.event))) dbRecords.splice(i, 1);
+  }
+
   // Emit open tool spans for any in-flight tool calls at the tail of an active session.
   for (const pending of pendingCalls) {
     if (!events.includes(pending.callEv)) continue;
@@ -750,7 +794,7 @@ async function parseTranscriptJsonl(ctx: ParseContext, sink: RecordSink, target:
     ?? (basename(baseDir) === 'antigravity-ide' ? 'ide' : 'app');
 
   // Define the session when no checkpointed `.db` steps exist; otherwise emit `enrich` so live WAL steps never leave metadata blank.
-  if (maxDbIdx < 0) {
+  if (!hasDbSession) {
     sink.emit({
       rec: 'session',
       id: session,

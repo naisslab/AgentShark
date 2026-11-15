@@ -471,7 +471,8 @@ export const deepseekAdapter: Adapter = {
           const startUs = stepStart ?? firstStreamUs ?? endUs ?? lastTs;
           const dur = stepStart !== undefined && endUs !== undefined && endUs >= stepStart ? endUs - stepStart
             : (firstStreamUs !== undefined && endUs !== undefined && endUs > firstStreamUs ? endUs - firstStreamUs : undefined);
-          const ttftUs = stepStart !== undefined && firstStreamUs !== undefined && firstStreamUs >= stepStart ? firstStreamUs - stepStart : undefined;
+          const firstTokenUs = firstContentTimeUs(stream);
+          const ttftUs = stepStart !== undefined && firstTokenUs !== undefined && firstTokenUs >= stepStart ? firstTokenUs - stepStart : undefined;
           const stopReason = str(finishItem?.chunk?.reason ?? finishItem?.reason);
 
           const rawUsage = data.usage ?? finishItem?.chunk?.usage ?? msg.usage;
@@ -842,6 +843,28 @@ export const deepseekAdapter: Adapter = {
 
 // ---------------------------------------------------------------------------
 // Helpers
+
+/** Block headers and finish records are protocol metadata, not generated tokens. */
+function firstContentTimeUs(stream: any[]): number | undefined {
+  for (const item of stream) {
+    if ((item?.type === 'text-chunks' || item?.type === 'reasoning-chunks') && Array.isArray(item.texts)) {
+      const index = item.texts.findIndex((text: unknown) => typeof text === 'string' && text.length > 0);
+      if (index < 0) continue;
+      // time0 timestamps the first fragment; dt stores the gaps between later fragments.
+      const base = num(item.time0);
+      const gaps = Array.isArray(item.dt) ? item.dt.slice(0, index) : [];
+      if (base !== undefined && gaps.length === index && gaps.every((gap: unknown) => num(gap) !== undefined)) {
+        return msToUs(base + gaps.reduce((sum: number, gap: number) => sum + gap, 0));
+      }
+    }
+    const chunk = item?.chunk;
+    if ((chunk?.type === 'text-delta' || chunk?.type === 'reasoning-delta') && typeof chunk.text === 'string' && chunk.text) {
+      const at = msToUs(item.time);
+      if (at !== undefined) return at;
+    }
+  }
+  return undefined;
+}
 
 function extractDshContent(content: unknown): string {
   if (typeof content === 'string') return content;

@@ -1,5 +1,5 @@
 -- AgentShark index schema (SPEC §5, §12.3). Bump SCHEMA_VERSION in src/index/db.ts when this changes.
--- Normalization v6 adds Antigravity JSONL transcripts, Gemini App & CLI sessions, and DeepSeek Harness logs.
+-- Normalization v7 reconciles Cortex checkpoints per step and measures DeepSeek TTFT from content tokens.
 
 -- Keys: schema_version (db.ts), link_pending (indexer), capture_* (capture reader), and for the analysis pass
 -- (src/index/derive.ts, SPEC §12.3.1):

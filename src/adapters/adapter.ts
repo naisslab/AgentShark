@@ -168,7 +168,7 @@ export async function openSource(path: string, zstd = isZstd(path)): Promise<Sou
 }
 
 /**
- * The decompressed bytes of a single-frame zstd file. A read at or after the previous read's position continues the
+ * The decompressed bytes of a single-frame or multi-frame zstd file. A read at or after the previous read's position continues the
  * current decompression pass, so reading front to back costs one pass; a read before it starts a new pass.
  */
 class ZstdSource implements SourceHandle {
@@ -240,54 +240,76 @@ async function* zstdChunks(fh: FileHandle, path: string): AsyncGenerator<Buffer>
     bufStart = pos;
     return buf;
   };
+  // Inspect frame/block headers before decoding. Supplying bytes from a later frame to Node's
+  // single-frame decoder can fail when the reader pauses and the writable side buffers ahead.
+  // RFC 8878 §§3.1.1.1–3.1.1.2: https://www.rfc-editor.org/rfc/rfc8878.html#section-3.1.1
+  const header = async (pos: number, length: number): Promise<Buffer | undefined> => {
+    if (pos + length > size) return undefined;
+    if (pos < bufStart || pos + length > bufStart + buf.length) await readWindow(pos);
+    if (pos + length > bufStart + buf.length) return undefined;
+    return buf.subarray(pos - bufStart, pos - bufStart + length);
+  };
+  const frameEnd = async (start: number): Promise<number | undefined> => {
+    const descriptor = await header(start + 4, 1);
+    if (!descriptor) return undefined;
+    const d = descriptor[0];
+    if (d & 8) throw new Error(`${path}: reserved zstd frame bit at byte ${start}`);
+    const single = (d & 32) !== 0;
+    const contentSize = (d >>> 6) === 0 ? (single ? 1 : 0) : 1 << (d >>> 6);
+    let pos = start + 5 + (single ? 0 : 1) + [0, 1, 2, 4][d & 3] + contentSize;
+    for (;;) {
+      const h = await header(pos, 3);
+      if (!h) return undefined;
+      const block = h.readUIntLE(0, 3);
+      const type = (block >>> 1) & 3;
+      if (type === 3) throw new Error(`${path}: reserved zstd block type at byte ${pos}`);
+      const blockSize = block >>> 3;
+      if (blockSize > 128 << 10) throw new Error(`${path}: oversized zstd block at byte ${pos}`);
+      pos += 3 + (type === 1 ? 1 : blockSize);
+      if (block & 1) {
+        pos += d & 4 ? 4 : 0;
+        return pos <= size ? pos : undefined;
+      }
+      if (pos > size) return undefined;
+    }
+  };
   while (offset < size) {
-    if (offset < bufStart || offset + 8 > bufStart + buf.length) await readWindow(offset);
-    const avail = bufStart + buf.length - offset;
-    if (avail < 4) {
+    const magicBytes = await header(offset, 4);
+    if (!magicBytes) {
       if (offset > 0) break;
       throw new Error(`${path}: truncated zstd frame header at byte ${offset}`);
     }
-    const at = offset - bufStart;
-    const magic = buf.readUInt32LE(at);
-    if (((magic & 0xfffffff0) >>> 0) === 0x184d2a50) {
-      if (avail < 8) {
-        if (offset > 0) break;
-        throw new Error(`${path}: truncated zstd skippable frame at byte ${offset}`);
-      }
-      const skip = 8 + buf.readUInt32LE(at + 4);
-      if (offset + skip > size) {
-        if (offset > 0) break;
-        throw new Error(`${path}: truncated zstd skippable frame at byte ${offset}`);
-      }
-      offset += skip;
-      continue;
+    const magic = magicBytes.readUInt32LE(0);
+    let end: number | undefined;
+    const skippable = ((magic & 0xfffffff0) >>> 0) === 0x184d2a50;
+    if (skippable) {
+      const h = await header(offset + 4, 4);
+      if (h && offset + 8 + h.readUInt32LE(0) <= size) end = offset + 8 + h.readUInt32LE(0);
+    } else {
+      if (magic !== 0xfd2fb528) throw new Error(`${path}: invalid zstd frame magic at byte ${offset}`);
+      end = await frameEnd(offset);
     }
-    if (magic !== 0xfd2fb528) throw new Error(`${path}: invalid zstd frame magic at byte ${offset}`);
-    const z = createZstdDecompress();
-    const src = (async function* () {
-      let pos = offset;
-      while (pos < size) {
-        if (pos >= bufStart && pos < bufStart + buf.length) {
-          const slice = buf.subarray(pos - bufStart);
+    if (end === undefined) {
+      // A live append may leave an incomplete final frame. Never expose its partial output.
+      if (offset > 0) break;
+      throw new Error(`${path}: truncated zstd frame at byte ${offset}`);
+    }
+    if (!skippable) {
+      const frameStart = offset;
+      const frameLimit = end;
+      const src = (async function* () {
+        let pos = frameStart;
+        while (pos < frameLimit) {
+          if (pos < bufStart || pos >= bufStart + buf.length) await readWindow(pos);
+          const slice = buf.subarray(pos - bufStart, Math.min(buf.length, frameLimit - bufStart));
+          if (!slice.length) throw new Error(`${path}: source changed while reading zstd frame`);
           pos += slice.length;
           yield slice;
-        } else {
-          const next = await readWindow(pos);
-          if (!next.length) break;
-          pos += next.length;
-          yield next;
         }
-      }
-    })();
-    try {
-      yield* pipeline(src, z, () => {});
-    } catch (err) {
-      // A live multi-frame writer can be caught mid-append on the final frame; keep all complete frames before it.
-      if (offset > 0 && /unexpected end|premature close|incomplete/i.test(String((err as Error)?.message ?? err))) break;
-      throw err;
+      })();
+      yield* pipeline(src, createZstdDecompress(), () => {});
     }
-    if (z.bytesWritten <= 0) throw new Error(`${path}: zstd decoder made no progress at byte ${offset}`);
-    offset += z.bytesWritten;
+    offset = end;
   }
 }
 

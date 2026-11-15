@@ -8,11 +8,11 @@ Use `sourceId`, `eventId` and `spanId` from `src/adapters/adapter.ts`. Keep raw 
 
 `ParseStats.sha256` identifies the original bytes from offset zero through `parsedBytes`. `readJsonl` computes this while parsing, including CRLF and blank lines and excluding an unfinished invalid tail. JSON-document adapters hash the exact Buffer they parse. Never hash a later reread and call it the parsed evidence. A state database may omit the fingerprint when its evidence cannot be represented as one stable file prefix.
 
-The raw reader verifies that indexed prefix before serving evidence. Appends are allowed; rewrites require reindexing. A zstd source (`.zst` or `.zstd`, including multi-frame append streams) is parsed, hashed and served as its decompressed bytes: open it with `openSource`, which `readJsonl` and the raw reader already use. Older sources without fingerprints are explicitly unverified. Do not claim that newline boundaries establish byte identity.
+The raw reader verifies that indexed prefix before serving evidence. Appends are allowed; rewrites require reindexing. A zstd source (`.zst` or `.zstd`, including multi-frame append streams) is parsed, hashed and served as its decompressed bytes: open it with `openSource`, which `readJsonl` and the raw reader already use. The Zstandard reader finds complete frame boundaries before decoding and excludes a torn final frame until its append completes. Older sources without fingerprints are explicitly unverified. Do not claim that newline boundaries establish byte identity.
 
 ## Normalized Semantics
 
-The Antigravity adapter reads both `conversations/*.db` and `brain/<id>/.system_generated/logs/transcript_full.jsonl` (falling back to `transcript.jsonl`) under `~/.gemini/antigravity` and `~/.gemini/antigravity-ide`. Both sources share a `groupKey` per conversation ID so re-indexing checkpoints cleanly without duplicates: checkpointed `.db` rows decode rich protobuf metadata (TTFT, streaming duration, `ModelUsageStats`, tool interactions), while `transcript_full.jsonl` supplies any live uncheckpointed `.db-wal` steps (`step_index > maxCheckpointedStepIndex`) and recovers sessions stored only as encrypted `.pb` files, complete with exact JSONL byte offsets.
+The Antigravity adapter reads both `conversations/*.db` and `brain/<id>/.system_generated/logs/transcript_full.jsonl` (falling back to `transcript.jsonl`) under `~/.gemini/antigravity` and `~/.gemini/antigravity-ide`. Both sources share a `groupKey` per conversation ID so re-indexing checkpoints cleanly without duplicates: checkpointed `.db` rows decode rich protobuf metadata (TTFT, streaming duration, `ModelUsageStats`, tool interactions), while `transcript_full.jsonl` supplies missing or unfinished steps and recovers sessions stored only as encrypted `.pb` files, complete with exact JSONL byte offsets. Reconciliation uses each decoded step rather than a maximum checkpoint index. Pending tool calls are tracked through checkpointed results, and turn spans cover events from both sources. Each span has one source owner, independent of parser completion order.
 
 Databases open with `immutable=1`. Checkpointed `.db` events reference the database and step index with a zero-length raw reference, whereas live or `.pb`-backed JSONL steps carry exact raw byte ranges. Unsupported step types emit `raw.unknown`; malformed rows emit diagnostics while other rows remain readable.
 
@@ -22,7 +22,7 @@ Do not turn command text, filenames or quoted error examples into observed failu
 
 ## Conformance Checks
 
-The conformance tests are not in this repository yet; an adapter must still meet what they check.
+The adapter regression tests cover compressed raw reads under backpressure, torn frames, checkpoint transitions, and content-token TTFT. Broader conformance fixtures described below remain future work.
 
 The shared conformance fixture verifies explicit root isolation, malformed-line accounting, partial-tail recovery, append fingerprints, stable identifiers and idempotent reindexing. Add source-specific fixtures for duplicate messages, out-of-order timestamps, missing call results, inherited history and deleted or rewritten files. Keep every fixture synthetic or deliberately sanitized.
 
