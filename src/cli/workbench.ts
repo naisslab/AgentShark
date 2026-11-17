@@ -59,15 +59,26 @@ export async function analyze(a: Args, checksOnly = false): Promise<number> {
   } finally { db.close(); }
 }
 
+const ROOT_KEYS = {
+  claude: 'claudeRoots',
+  codex: 'codexRoots',
+  antigravity: 'antigravityRoots',
+  gemini: 'geminiRoots',
+  deepseek: 'deepseekRoots',
+} as const;
+
 export async function configureSources(a: Args): Promise<number> {
   const config = readSourceConfig();
   const agent = string(a.values.agent);
   const add = strings(a.values.add) ?? [];
   const remove = strings(a.values.remove) ?? [];
-  if ((add.length || remove.length) && agent !== 'claude' && agent !== 'codex') throw new CliError('--agent must be claude or codex when changing roots', 2);
+  const validAgent = agent && Object.prototype.hasOwnProperty.call(ROOT_KEYS, agent) ? (agent as keyof typeof ROOT_KEYS) : undefined;
+  if ((add.length || remove.length) && !validAgent) {
+    throw new CliError('--agent must be claude, codex, antigravity, gemini or deepseek when changing roots', 2);
+  }
   if (a.values['auto-discover'] && a.values['no-auto-discover']) throw new CliError('Choose --auto-discover or --no-auto-discover', 2);
-  if (agent === 'claude' || agent === 'codex') {
-    const key = agent === 'claude' ? 'claudeRoots' : 'codexRoots';
+  if (validAgent) {
+    const key = ROOT_KEYS[validAgent];
     const absolute = (p: string) => resolve(p === '~' ? homedir() : p.startsWith('~/') || p.startsWith('~\\') ? homedir() + p.slice(1) : p);
     const excluded = new Set(remove.map(absolute));
     config[key] = [...new Set([...config[key], ...add.map(absolute)])].filter(p => !excluded.has(p));

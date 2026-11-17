@@ -61,6 +61,8 @@ enum Symbols {
         case .codex: return "chevron.left.forwardslash.chevron.right"
         case .copilot: return "airplane"
         case .antigravity: return "arrow.up.circle"
+        case .gemini: return "sparkles"
+        case .deepseek: return "waveform.path.ecg"
         default: return "cpu"
         }
     }

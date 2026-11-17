@@ -189,7 +189,10 @@ enum SidebarTreeBuilder {
         }
         let agentOrder = AgentKind.known + byAgent.keys.filter { !AgentKind.known.contains($0) }.sorted()
         for agent in agentOrder {
-            guard let projects = byAgent[agent] else { continue }
+            // Keep supported agents visible before their first local session is recorded.
+            // Active list filters still hide groups with no matching sessions.
+            let projects = byAgent[agent] ?? [:]
+            if projects.isEmpty && filter.isActive { continue }
             let section = SidebarItem(kind: .section, key: "agent:\(agent.rawValue)", title: agent.label)
             section.agent = agent
             // Projects in order of their most recent session.

@@ -85,11 +85,12 @@ export class QueryHost {
 
   /** The derived API the routes use. Methods whose query names a `view` run in the worker that holds the view. */
   derivedApi(): ApiDerivedQueries {
-    const local = this.opts.localDerived as unknown as Record<string, (...a: unknown[]) => unknown> | undefined;
     return new Proxy({} as ApiDerivedQueries, {
       get: (_, method) => (...args: unknown[]) => {
         if (typeof method !== 'string') return undefined;
         if (method === 'noteChanges') return this.call('noteChanges', args);
+        // A promoted rebuild replaces the local connection while this API object stays in use.
+        const local = this.opts.localDerived as unknown as Record<string, (...a: unknown[]) => unknown> | undefined;
         if (local && (method === 'analysisStatus' || this.closed)) return local[method](...args);
         const viewId = args.map((a) => (a && typeof a === 'object' ? (a as { view?: unknown }).view : undefined)).find((v) => typeof v === 'string');
         return this.enqueue('derived', method, args, viewId as string | undefined);

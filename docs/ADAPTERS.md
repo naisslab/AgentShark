@@ -8,13 +8,13 @@ Use `sourceId`, `eventId` and `spanId` from `src/adapters/adapter.ts`. Keep raw 
 
 `ParseStats.sha256` identifies the original bytes from offset zero through `parsedBytes`. `readJsonl` computes this while parsing, including CRLF and blank lines and excluding an unfinished invalid tail. JSON-document adapters hash the exact Buffer they parse. Never hash a later reread and call it the parsed evidence. A state database may omit the fingerprint when its evidence cannot be represented as one stable file prefix.
 
-The raw reader verifies that indexed prefix before serving evidence. Appends are allowed; rewrites require reindexing. A zstd source (`.zst`) is parsed, hashed and served as its decompressed bytes: open it with `openSource`, which `readJsonl` and the raw reader already use. Older sources without fingerprints are explicitly unverified. Do not claim that newline boundaries establish byte identity.
+The raw reader verifies that indexed prefix before serving evidence. Appends are allowed; rewrites require reindexing. A zstd source (`.zst` or `.zstd`, including multi-frame append streams) is parsed, hashed and served as its decompressed bytes: open it with `openSource`, which `readJsonl` and the raw reader already use. The Zstandard reader finds complete frame boundaries before decoding and excludes a torn final frame until its append completes. Older sources without fingerprints are explicitly unverified. Do not claim that newline boundaries establish byte identity.
 
 ## Normalized Semantics
 
-The Antigravity adapter reads `conversations/*.db` under `~/.gemini/antigravity` and `~/.gemini/antigravity-ide`. It prefers the app copy when both folders contain the same conversation filename. The adapter uses protobuf field numbers from the installed language server's descriptors, so support remains partial and version-dependent. Older encrypted `.pb` conversations are excluded.
+The Antigravity adapter reads both `conversations/*.db` and `brain/<id>/.system_generated/logs/transcript_full.jsonl` (falling back to `transcript.jsonl`) under `~/.gemini/antigravity` and `~/.gemini/antigravity-ide`. Both sources share a `groupKey` per conversation ID so re-indexing checkpoints cleanly without duplicates: checkpointed `.db` rows decode rich protobuf metadata (TTFT, streaming duration, `ModelUsageStats`, tool interactions), while `transcript_full.jsonl` supplies missing or unfinished steps and recovers sessions stored only as encrypted `.pb` files, complete with exact JSONL byte offsets. Reconciliation uses each decoded step rather than a maximum checkpoint index. Pending tool calls are tracked through checkpointed results, and turn spans cover events from both sources. Each span has one source owner, independent of parser completion order.
 
-Databases open with `immutable=1`: uncheckpointed WAL rows are not visible. Antigravity events reference the database and step index with a zero-length raw reference. The detail view contains selected decoded metadata, not a recoverable raw step. Unsupported step types emit `raw.unknown`; malformed rows emit diagnostics while other rows remain readable. Unchanged database files use size, modification time and inode for incremental indexing, as Codex state databases do. Changes only to `conversation_summaries.db` appear when the conversation is reparsed, including with `index --full`.
+Databases open with `immutable=1`. Checkpointed `.db` events reference the database and step index with a zero-length raw reference, whereas live or `.pb`-backed JSONL steps carry exact raw byte ranges. Unsupported step types emit `raw.unknown`; malformed rows emit diagnostics while other rows remain readable.
 
 Use integer UTC microseconds for timestamps and durations. Mark whether a timestamp or duration is logged, derived or unknown. Missing usage stays missing; it is not zero. Distinguish inherited context, mirrored records and newly executed work before aggregating. Pair tool calls and results through logged identifiers when available, and retain unpaired records with diagnostics.
 
@@ -22,7 +22,7 @@ Do not turn command text, filenames or quoted error examples into observed failu
 
 ## Conformance Checks
 
-The conformance tests are not in this repository yet; an adapter must still meet what they check.
+The adapter regression tests cover compressed raw reads under backpressure, torn frames, checkpoint transitions, and content-token TTFT. Broader conformance fixtures described below remain future work.
 
 The shared conformance fixture verifies explicit root isolation, malformed-line accounting, partial-tail recovery, append fingerprints, stable identifiers and idempotent reindexing. Add source-specific fixtures for duplicate messages, out-of-order timestamps, missing call results, inherited history and deleted or rewritten files. Keep every fixture synthetic or deliberately sanitized.
 
@@ -43,3 +43,15 @@ Fresh VS Code 1.144.0 with bundled Copilot Chat 0.72.0 produced persisted usage 
 The adapter links usage and assistant messages by `apiCallId` (or `requestId`) and links tools through `toolRequests[].toolCallId`. This keeps step usage, latency and tools together even when usage arrives before the message. Unmatched messages keep their own timestamp and no measured model duration. Copilot context-window capacity remains unknown; the Claude-specific estimate does not apply.
 
 Run `agentshark index --agent cp` to read local Copilot logs. Use `agentshark capture --agent cp -o copilot.agentcap.zst` to preserve the indexed evidence and `agentshark open copilot.agentcap.zst` to inspect it later. Workspace-only metadata changes require `agentshark index --full --agent cp`.
+
+## Gemini and DeepSeek Harness Sources
+
+The `gemini` adapter (`gm:`) covers both the `Gemini.app` macOS desktop app (`com.google.GeminiMacOS`) and Gemini CLI (`@google/gemini-cli`):
+- **Gemini macOS App Code Mode & Runtime Inspector:** Trajectories written by `Gemini.app`'s embedded helper (`trajectory_meta.source === 21` in `~/.gemini/antigravity/{conversations,brain}`) reuse the Cortex `.db` + `transcript_full.jsonl` pipeline under the `gm:` namespace (`geminiAdapter` precedes `antigravityAdapter` in `ADAPTERS`). Exported `VegaTrajectoryArchives/*.json` documents in `~/Library/Application Support/com.google.GeminiMacOS/VegaTrajectoryArchives` are also indexed. Standard cloud-only chats in `Gemini.app` stay server-side and write no local transcript.
+- **Gemini CLI:** Reads `~/.gemini/tmp/<project>/chats/session-*.json`, resolving workspace paths via `<project>/.project_root` and `~/.gemini/projects.json`, and extracting `thoughts`, `tokens` (`input`, `output`, `thoughts`, `tool`, `cached`), `toolCalls`, and paired `functionResponse` outputs.
+
+Vega archives retain user and model text from role-tagged `content` fields, including text parts. Explicit archive prompts remain supported for model-call archives; archive titles are session labels, not conversation text. Index schema 8 reparses older cached archives to restore the missing text and search entries.
+
+The `deepseek` adapter (`ds:`) covers `DeepSeek Harness.app` (`@deepseek-ai/dsh-desktop`) and the `dsh` CLI under `~/.dsh/sessions/<workspace>/<session>/`:
+- **Multi-frame Zstandard streaming:** DeepSeek Harness flushes each append as a separate Zstandard frame into `session.v4.jsonl.zstd`. `openSource()` scans standard (`0xFD2FB528`) and skippable (`0x184D2A50..5F`) frame headers, stops cleanly before any torn trailing frame during a live write, and hashes the decompressed prefix so `VerifiedSource` raw byte inspection and `.agentcap` captures verify every record.
+- **Record normalization:** Pairs `step/start` and `stream` chunks for exact TTFT and model call latency, reads `assistant/message` `data.usage` (`inputTokens + cacheReadTokens + cacheWriteTokens`), pairs `tool/call` + `job/registered` + `job/settled` + `tool/result` for logged shell durations, PIDs and exit codes, pairs `approval/asked` and `approval/decided` into permission spans, marks `session/end-seed` prefixes as `inherited`, and links `subagent/catalog` and `team/member` records to `ds:<childSessionId>`. Workspace titles and paths are enriched from `~/.dsh/storages/workspace.json`.

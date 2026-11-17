@@ -2,8 +2,8 @@
 // Semantics are specified in docs/SPEC.md §3; capture framing in docs/FORMAT.md.
 // Times are integer microseconds since the Unix epoch (UTC); durations are integer microseconds.
 
-export type AgentKind = 'claude-code' | 'claude-cowork' | 'codex' | 'copilot' | 'antigravity';
-export type AgentPrefix = 'cc' | 'cw' | 'cx' | 'cp' | 'ag';
+export type AgentKind = 'claude-code' | 'claude-cowork' | 'codex' | 'copilot' | 'antigravity' | 'gemini' | 'deepseek';
+export type AgentPrefix = 'cc' | 'cw' | 'cx' | 'cp' | 'ag' | 'gm' | 'ds';
 
 export const AGENT_PREFIX: Record<AgentKind, AgentPrefix> = {
   'claude-code': 'cc',
@@ -11,6 +11,8 @@ export const AGENT_PREFIX: Record<AgentKind, AgentPrefix> = {
   codex: 'cx',
   copilot: 'cp',
   antigravity: 'ag',
+  gemini: 'gm',
+  deepseek: 'ds',
 };
 
 export type SourceKind =
@@ -23,7 +25,10 @@ export type SourceKind =
   | 'state-db' // Codex state_5.sqlite
   | 'chat-session' // VS Code Copilot chat session JSON or mutation log
   | 'session-events' // Copilot CLI session-state events.jsonl
-  | 'trajectory-db'; // Antigravity conversation SQLite (conversations/<id>.db)
+  | 'trajectory-db' // Antigravity / Gemini App conversation SQLite (conversations/<id>.db)
+  | 'antigravity-transcript' // Antigravity / Gemini App brain/<id>/.system_generated/logs/transcript*.jsonl
+  | 'gemini-session' // Gemini CLI chats/session-*.json or Gemini App VegaTrajectoryArchive JSON
+  | 'dsh-session'; // DeepSeek Harness session.v*.jsonl[.zstd]
 
 export type SessionRole = 'main' | 'subagent' | 'workflow-agent' | 'guardian' | 'review' | 'fork' | 'automation';
 export type SessionState = 'ok' | 'missing-transcript' | 'source-deleted';

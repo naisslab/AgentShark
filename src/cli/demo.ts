@@ -28,7 +28,7 @@ export async function demo(a: Args): Promise<number> {
   const previousHome = process.env.AGENTSHARK_HOME;
   const previousConfig = process.env.AGENTSHARK_SOURCE_CONFIG;
   const config = join(temp, 'sources.json');
-  writeSourceConfig({ version: 1, autoDiscover: false, ...roots }, config);
+  writeSourceConfig({ version: 1, autoDiscover: false, antigravityRoots: [], geminiRoots: [], deepseekRoots: [], ...roots }, config);
   process.env.AGENTSHARK_HOME = temp;
   process.env.AGENTSHARK_SOURCE_CONFIG = config;
   const cleanup = () => rmSync(temp, { recursive: true, force: true });

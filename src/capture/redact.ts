@@ -18,8 +18,9 @@ const NUMERIC_ATTRS = new Set(['tokens', 'cost']);
 const SAFE_TOOL = new Set(['kind', 'exit_code', 'is_error', 'output_len', 'reported_wall_ms', 'inner_errors']);
 const SAFE_TEXT = new Set(['agent', 'kind', 'role', 'state', 'tsSrc', 'actor', 'durSrc', 'status', 'severity', 'group', 'rec', 'op', 'src']);
 const STRUCTURAL = new Set([...Object.keys(EVENT_KINDS), ...Object.keys(SPAN_KINDS),
-  'source', 'event', 'span', 'expert', 'enrich', 'claude-code', 'claude-cowork', 'codex', 'copilot', 'antigravity',
+  'source', 'event', 'span', 'expert', 'enrich', 'claude-code', 'claude-cowork', 'codex', 'copilot', 'antigravity', 'gemini', 'deepseek',
   'transcript', 'subagent-transcript', 'workflow-transcript', 'rollout', 'audit', 'registry', 'state-db', 'chat-session', 'session-events', 'trajectory-db',
+  'antigravity-transcript', 'gemini-session', 'dsh-session',
   'main', 'subagent', 'workflow-agent', 'guardian', 'review', 'fork', 'automation', 'missing-transcript', 'source-deleted',
   'logged', 'inherited', 'none', 'user', 'assistant', 'system', 'harness', 'agent', 'ok', 'error', 'cancelled',
   'interrupted', 'open', 'unknown', 'warn', 'note', 'chat', 'malformed', 'undecoded', 'unpaired', 'tool-error',
@@ -41,7 +42,7 @@ export class CaptureRedactor {
   }
   id(value: string): string {
     // Preserve the agent prefix that existing filters use; the rest is a keyed opaque identity.
-    const prefix = /^(?:cc|cw|cx|cp|ag):/.exec(value)?.[0] ?? (value.startsWith('s_') ? 's_' : 'id_');
+    const prefix = /^(?:cc|cw|cx|cp|ag|gm|ds):/.exec(value)?.[0] ?? (value.startsWith('s_') ? 's_' : 'id_');
     return prefix + this.token('id', value);
   }
   private text(value: string, kind = 'text'): string {

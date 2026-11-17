@@ -1,7 +1,7 @@
 {
   "name": "agentshark",
   "version": "0.1.0",
-  "description": "Inspect supported local coding-agent logs (Claude Code, Claude Cowork, Codex, Copilot Chat) from session timelines down to the original records.",
+  "description": "Inspect supported local coding-agent logs (Claude Code, Claude Cowork, Codex, Copilot, Antigravity, Gemini, DeepSeek Harness) from session timelines down to the original records.",
   "type": "module",
   "license": "MIT",
   "files": [

@@ -3,7 +3,7 @@
 // otherwise taken from docs/research), what was lost, and how to log more.
 
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { type DiscoverEnv, agentRoots, defaultEnv } from './adapters/adapter.ts';
 import { openReadOnly } from './adapters/codex-state.ts';
@@ -91,16 +91,49 @@ const KNOWN: Record<AgentKind, Known> = {
     'exit-codes': ['partial', 'Command steps and terminal render blocks can carry an exit code; other tools report a step status only.'],
     'token-usage': ['logged', 'ModelUsageStats per model call.'],
     'cache-tokens': ['logged', 'cache_read_tokens and cache_write_tokens in ModelUsageStats.'],
-    'reasoning-text': ['partial', 'Planner responses keep thinking summaries when the model returns them.'],
+    'reasoning-text': ['partial', 'Planner responses and live JSONL transcripts keep thinking text when the model returns it.'],
     'system-prompt': ['partial', 'Generator metadata can hold the system prompt; AgentShark does not index it.'],
     'tool-definitions': ['partial', 'Generator metadata lists the tools offered; AgentShark does not index them.'],
     'subagent-tree': ['partial', 'Subagent conversations name their parent conversation.'],
-    'file-diffs': ['absent', 'File edits are snapshotted in code_tracker without a link to their step; not parsed.'],
+    'file-diffs': ['partial', 'Transcript tool arguments record edit targets and replacements; code_tracker snapshots lack step links.'],
     cost: ['absent', 'Steps count credits, not cost.'],
     'raw-http': ['absent', 'Requests and responses are not stored.'],
     'permission-decisions': ['partial', 'Requested and completed interactions on tool steps; automatic approvals leave none.'],
   },
-
+  gemini: {
+    timestamps: ['logged', 'Every Cortex trajectory step and Gemini CLI message records a timestamp.'],
+    'llm-latency': ['partial', 'Code Mode trajectories log TTFT and streaming duration; Gemini CLI sessions derive latency from message timestamps.'],
+    ttft: ['partial', 'Code Mode trajectories log time_to_first_token; Gemini CLI sessions record none.'],
+    'tool-durations': ['partial', 'Code Mode tool steps log start and completion times; Gemini CLI tool calls derive duration when paired.'],
+    'exit-codes': ['partial', 'Code Mode command steps log exit codes; Gemini CLI shell results report status text.'],
+    'token-usage': ['logged', 'Gemini CLI tokens (input, output, thoughts, tool, cached) and Code Mode ModelUsageStats per model call.'],
+    'cache-tokens': ['logged', 'Gemini CLI tokens.cached and Code Mode cache_read_tokens and cache_write_tokens.'],
+    'reasoning-text': ['logged', 'Gemini CLI thoughts blocks and Code Mode planner thinking text.'],
+    'system-prompt': ['absent', 'Local session files and Code Mode trajectories omit the full system prompt text.'],
+    'tool-definitions': ['absent', 'Tool schemas are not stored in Gemini session logs.'],
+    'subagent-tree': ['partial', 'Code Mode subagent trajectories link to their parent conversation.'],
+    'file-diffs': ['partial', 'Write and edit tool calls record target paths and replacement text in tool arguments.'],
+    cost: ['absent', 'Gemini logs record token counts, not USD cost.'],
+    'raw-http': ['absent', 'Requests and responses are not stored.'],
+    'permission-decisions': ['partial', 'Code Mode trajectories record requested and completed tool interactions.'],
+  },
+  deepseek: {
+    timestamps: ['logged', 'Every session record carries an epoch-millisecond timestamp.'],
+    'llm-latency': ['logged', 'Stream chunks from step/start to chunk:finish give model call latency.'],
+    ttft: ['logged', 'First text or reasoning stream chunk after step/start gives time to first token.'],
+    'tool-durations': ['logged', 'job/settled records startedAt and finishedAt wall time; non-job tools pair call and result timestamps.'],
+    'exit-codes': ['logged', 'job/settled records shell exit codes alongside process IDs.'],
+    'token-usage': ['logged', 'assistant/message data.usage reports inputTokens, outputTokens and totalTokens per model call.'],
+    'cache-tokens': ['logged', 'assistant/message data.usage reports cacheReadTokens and cacheWriteTokens.'],
+    'reasoning-text': ['logged', 'Reasoning content blocks and stream deltas are logged on assistant steps.'],
+    'system-prompt': ['absent', 'Session JSONL streams omit the base system prompt.'],
+    'tool-definitions': ['absent', 'Built-in and MCP tool schemas are not written to session JSONL streams.'],
+    'subagent-tree': ['logged', 'subagent/catalog and team/member records link every spawned subagent session ID to its parent call.'],
+    'file-diffs': ['partial', 'write and edit tool calls record target file paths and replacement text in tool arguments.'],
+    cost: ['absent', 'DeepSeek Harness logs tokens and cache hits, not currency cost.'],
+    'raw-http': ['absent', 'Requests and responses are not stored in session streams.'],
+    'permission-decisions': ['logged', 'approval/asked and approval/decided records log every permission prompt, decision and wait time.'],
+  },
 };
 
 interface AgentDef {
@@ -138,9 +171,30 @@ const AGENTS: AgentDef[] = [
   },
   {
     agent: 'antigravity',
-    label: 'Google Antigravity',
-    roots: (e) => e.autoDiscover === false ? [] : [join(e.home, '.gemini', 'antigravity', 'conversations'), join(e.home, '.gemini', 'antigravity-ide', 'conversations')],
-    detect: (e) => e.autoDiscover === false ? [] : [join(e.home, '.gemini', 'antigravity'), join(e.home, '.gemini', 'antigravity-ide')],
+    label: 'Google Antigravity (App, IDE, CLI)',
+    roots: (e) => agentRoots(e, 'antigravity').flatMap((r) => [join(r, 'conversations'), join(r, 'brain')]),
+    detect: (e) => [...agentRoots(e, 'antigravity'), ...(e.autoDiscover === false ? [] : ['/Applications/Antigravity.app', join(e.appSupport, 'Antigravity')])],
+  },
+  {
+    agent: 'gemini',
+    label: 'Google Gemini (App, CLI)',
+    roots: (e) => [
+      ...agentRoots(e, 'gemini').flatMap((r) => [join(r, 'tmp'), join(r, 'antigravity', 'conversations'), join(r, 'antigravity', 'brain')]),
+      ...(e.autoDiscover === false ? [] : [join(e.appSupport, 'com.google.GeminiMacOS', 'VegaTrajectoryArchives')]),
+    ],
+    detect: (e) => [
+      ...agentRoots(e, 'gemini').flatMap((r) => [join(r, 'tmp'), join(r, 'tasks')]),
+      ...(e.autoDiscover === false ? [] : ['/Applications/Gemini.app', join(e.appSupport, 'com.google.GeminiMacOS')]),
+    ],
+  },
+  {
+    agent: 'deepseek',
+    label: 'DeepSeek Harness (App, CLI)',
+    roots: (e) => agentRoots(e, 'deepseek').map((r) => basename(r) === 'sessions' ? r : join(r, 'sessions')),
+    detect: (e) => [
+      ...agentRoots(e, 'deepseek'),
+      ...(e.autoDiscover === false ? [] : ['/Applications/DeepSeek Harness.app', join(e.appSupport, '@deepseek-ai', 'dsh-desktop')]),
+    ],
   },
 ];
 
@@ -152,7 +206,6 @@ const OTHER_AGENTS: { agent: string; label: string; paths: (e: DiscoverEnv) => s
     paths: (e) => [join(e.appSupport, 'com.openai.chat')],
     detail: 'The conversation cache (conversations-v3-*/*.data) is encrypted with a key held in the Keychain.',
   },
-  { agent: 'gemini-cli', label: 'Gemini CLI', paths: (e) => [join(e.home, '.gemini', 'tmp')], detail: 'AgentShark v1 has no Gemini CLI adapter.' },
   { agent: 'cursor', label: 'Cursor', paths: (e) => [join(e.home, '.cursor'), join(e.appSupport, 'Cursor')], detail: 'AgentShark v1 has no Cursor adapter.' },
   { agent: 'windsurf', label: 'Windsurf', paths: (e) => [join(e.appSupport, 'Windsurf'), join(e.home, '.codeium', 'windsurf')], detail: 'AgentShark v1 has no Windsurf adapter.' },
   {
@@ -212,6 +265,24 @@ const MCP_CODEX: HealthRecommendation = {
   text: 'Add this table to ~/.codex/config.toml. It assumes agentshark is on your PATH (npm link in the AgentShark checkout).',
   code: { lang: 'toml', snippet: '[mcp_servers.agentshark]\ncommand = "agentshark"\nargs = ["mcp"]' },
   effect: 'Codex starts a read-only AgentShark server; AgentShark writes no agent configuration',
+};
+
+const MCP_ANTIGRAVITY: HealthRecommendation = {
+  text: 'Add this server entry to ~/.gemini/antigravity/mcp_config.json (or ~/.gemini/config/mcp_config.json). It assumes agentshark is on your PATH.',
+  code: { lang: 'json', snippet: '{\n  "mcpServers": {\n    "agentshark": { "command": "agentshark", "args": ["mcp"] }\n  }\n}' },
+  effect: 'Antigravity starts a read-only AgentShark server; AgentShark writes no agent configuration',
+};
+
+const MCP_GEMINI: HealthRecommendation = {
+  text: 'Run this once for Gemini CLI (or add mcpServers.agentshark to ~/.gemini/settings.json). It assumes agentshark is on your PATH.',
+  code: { lang: 'sh', snippet: 'gemini mcp add agentshark -- agentshark mcp' },
+  effect: 'Gemini starts a read-only AgentShark server; AgentShark writes no agent configuration',
+};
+
+const MCP_DEEPSEEK: HealthRecommendation = {
+  text: 'Add this server entry in DeepSeek Harness MCP settings. It assumes agentshark is on your PATH.',
+  code: { lang: 'json', snippet: '{\n  "mcpServers": {\n    "agentshark": { "command": "agentshark", "args": ["mcp"] }\n  }\n}' },
+  effect: 'DeepSeek Harness starts a read-only AgentShark server; AgentShark writes no agent configuration',
 };
 
 export interface HealthOptions {
@@ -456,8 +527,25 @@ async function findings(def: AgentDef, m: Measures, env: DiscoverEnv, captured: 
   const claude = def.agent === 'claude-code' || def.agent === 'claude-cowork';
   if (def.agent === 'antigravity') out.push({
     severity: 'note',
-    title: 'Partial Antigravity trajectory support',
-    detail: 'AgentShark reads conversation .db files, not older encrypted .pb files. Rows still in the write-ahead log appear after Antigravity checkpoints them. Database events have selected decoded metadata but no raw source line.',
+    title: 'Antigravity database and live transcript support',
+    detail:
+      'AgentShark reads conversation .db files together with brain/<id>/.system_generated/logs/transcript_full.jsonl, recovering uncheckpointed ' +
+      'write-ahead log steps and .pb-only sessions with raw JSONL byte offsets. Checkpointed .db steps decode protobuf metadata without a text source line.',
+  });
+  if (def.agent === 'gemini') out.push({
+    severity: 'note',
+    title: 'Gemini macOS app and CLI local trace coverage',
+    detail:
+      'Standard cloud chats in Gemini.app stay server-side and write no local transcript. AgentShark indexes local Code Mode trajectories ' +
+      '(source 21 in ~/.gemini/antigravity), exported VegaTrajectoryArchives in ~/Library/Application Support/com.google.GeminiMacOS, ' +
+      'and Gemini CLI sessions under ~/.gemini/tmp/*/chats/session-*.json.',
+  });
+  if (def.agent === 'deepseek' && m.files > 0) out.push({
+    severity: 'note',
+    title: 'Multi-frame Zstandard session streams',
+    detail:
+      'DeepSeek Harness appends Zstandard frames to session.v4.jsonl.zstd as turns run. AgentShark streams all complete frames directly ' +
+      'and verifies raw byte offsets against the decompressed JSONL stream.',
   });
   if (def.agent === 'copilot') out.push({
     severity: 'note', title: 'Copilot support is partial',
@@ -525,12 +613,19 @@ async function findings(def: AgentDef, m: Measures, env: DiscoverEnv, captured: 
     });
   }
 
-  if ((def.agent === 'claude-code' || def.agent === 'codex') && m.files > 0 && !captured) {
+  const mcpRec =
+    def.agent === 'claude-code' ? MCP_CLAUDE :
+    def.agent === 'codex' ? MCP_CODEX :
+    def.agent === 'antigravity' ? MCP_ANTIGRAVITY :
+    def.agent === 'gemini' ? MCP_GEMINI :
+    def.agent === 'deepseek' ? MCP_DEEPSEEK :
+    undefined;
+  if (mcpRec && m.files > 0 && !captured) {
     out.push({
       severity: 'chat',
       title: `Let ${def.label} read its own failures through MCP`,
       detail: MCP_DETAIL,
-      recommendation: def.agent === 'codex' ? MCP_CODEX : MCP_CLAUDE,
+      recommendation: mcpRec,
     });
   }
   if (def.agent === 'claude-code') {
